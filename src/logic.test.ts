@@ -179,20 +179,20 @@ describe("processLevelUps", () => {
 
   it("XP が足りるとレベルアップ", () => {
     const player = freshPlayer();
-    player.xp = 20;
+    player.xp = 55;
     const gained = processLevelUps(player);
     expect(gained).toBe(1);
     expect(player.level).toBe(2);
-    expect(player.statPoints).toBe(1);
-    expect(player.xp).toBe(4); // 20 - 16
+    expect(player.statPoints).toBe(3);
+    expect(player.xp).toBe(5); // 55 - 50
   });
 
   it("一度に複数レベルアップ", () => {
     const player = freshPlayer();
-    player.xp = 100;
+    player.xp = 200;
     const gained = processLevelUps(player);
     expect(gained).toBeGreaterThan(1);
     expect(player.level).toBeGreaterThan(2);
-    expect(player.statPoints).toBe(gained);
+    expect(player.statPoints).toBe(gained * 3);
   });
 });

@@ -104,8 +104,8 @@ export function processLevelUps(player: PlayerState): number {
   while (player.xp >= player.nextXp) {
     player.xp -= player.nextXp;
     player.level += 1;
-    player.nextXp = Math.floor(player.nextXp * 1.25);
-    player.statPoints += 1;
+    player.nextXp = Math.floor(player.nextXp * 1.5);
+    player.statPoints += 3;
     levelsGained += 1;
   }
   return levelsGained;
@@ -117,7 +117,7 @@ export function createDefaultPlayer(): PlayerState {
     maxHp: 36,
     xp: 0,
     level: 1,
-    nextXp: 16,
+    nextXp: 50,
     statPoints: 0,
     stats: { P: 4, I: 4, V: 4, F: 4, A: 4, S: 4, T: 4 },
     burnMs: 0,

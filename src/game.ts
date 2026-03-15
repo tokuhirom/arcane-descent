@@ -152,7 +152,7 @@ function createStarterState(): RunState {
       maxHp: 36,
       xp: 0,
       level: 1,
-      nextXp: 16,
+      nextXp: 50,
       statPoints: 0,
       stats: {
         P: 4,
