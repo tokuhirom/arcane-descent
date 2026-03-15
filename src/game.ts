@@ -38,8 +38,18 @@ interface Wand {
   specialEffects: SpecialEffect[];
 }
 
+type ArmorEffect = "Thorns" | "Dodge" | "Reflect" | "Regen" | "Speed";
+interface Armor {
+  name: string;
+  rarity: Rarity;
+  defense: number;
+  attribute: Attribute;
+  specialEffect: ArmorEffect | null;
+}
+
 interface GamePlayerState extends PlayerState {
   wand: Wand;
+  armor: Armor;
 }
 
 interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
@@ -83,8 +93,9 @@ interface RunState {
 }
 
 interface LootSprite extends Phaser.Physics.Arcade.Image {
-  lootType: "wand";
+  lootType: "wand" | "armor";
   wand: Wand;
+  armor: Armor;
 }
 
 interface BossProfile {
@@ -168,6 +179,7 @@ function createStarterState(): RunState {
         T: 4
       },
       wand: createRandomWand(1, true),
+      armor: createDefaultArmor(),
       burnMs: 0,
       iceMs: 0,
       thunderMs: 0,
@@ -238,6 +250,31 @@ function createRandomWand(floor: number, starter = false): Wand {
     },
     specialEffects: effects
   };
+}
+
+const ARMOR_EFFECTS: ArmorEffect[] = ["Thorns", "Dodge", "Reflect", "Regen", "Speed"];
+
+function createDefaultArmor(): Armor {
+  return { name: "布のローブ", rarity: "Common", defense: 1, attribute: "None", specialEffect: null };
+}
+
+function createRandomArmor(floor: number): Armor {
+  const fortuneBonus = Math.floor(floor / 25);
+  const rarityRoll = Phaser.Math.Between(0, 100) + fortuneBonus * 8;
+  const rarity: Rarity =
+    rarityRoll > 98 ? "Legendary" :
+    rarityRoll > 88 ? "Epic" :
+    rarityRoll > 72 ? "Rare" :
+    rarityRoll > 44 ? "Uncommon" : "Common";
+
+  const rarityIndex = rarityValue(rarity);
+  const attribute = pick(ATTRIBUTES);
+  const defense = 2 + floor * 0.3 + rarityIndex * 1.5;
+  const specialEffect: ArmorEffect | null = rarityIndex >= 2 ? pick(ARMOR_EFFECTS) : null;
+  const suffixes = ["鎧", "ローブ", "マント"];
+  const name = `${attribute === "None" ? "魔力" : attribute}の${suffixes[Phaser.Math.Between(0, 2)]}`;
+
+  return { name, rarity, defense, attribute, specialEffect };
 }
 
 function makeText(scene: Phaser.Scene, x: number, y: number, text: string, size = 18, color = "#f8f1ff"): Phaser.GameObjects.Text {
@@ -334,6 +371,15 @@ class BootScene extends Phaser.Scene {
     g.fillStyle(0x7bdff2, 0.9);
     g.fillRect(0, 0, 14, 14);
     g.generateTexture("ice-pillar", 14, 14);
+    g.clear();
+
+    g.fillStyle(0x6c757d, 1);
+    g.fillRect(0, 0, 18, 18);
+    g.lineStyle(2, 0xf8f1ff, 1);
+    g.strokeRect(0, 0, 18, 18);
+    g.fillStyle(0x9d4edd, 1);
+    g.fillRect(4, 4, 10, 10);
+    g.generateTexture("armor-drop", 18, 18);
     g.destroy();
 
     this.scene.start("TitleScene");
@@ -511,6 +557,65 @@ class WandCompareScene extends Phaser.Scene {
   }
 }
 
+class ArmorCompareScene extends Phaser.Scene {
+  constructor() {
+    super("ArmorCompareScene");
+  }
+
+  create(data: { current: Armor; found: Armor; onEquip: () => void; onSkip: () => void }): void {
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6);
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 340, 0x0f1020, 0.94)
+      .setStrokeStyle(2, 0x9d4edd);
+
+    const cx = panel.x - 200;
+    const cy = panel.y - 140;
+
+    makeText(this, cx, cy, "防具比較", 24, "#f8f1ff");
+
+    const effectLabel = (effect: ArmorEffect | null): string => {
+      if (!effect) return "-";
+      const labels: Record<ArmorEffect, string> = {
+        Thorns: "Thorns: 接触時に敵へ3ダメージ",
+        Dodge: "Dodge: 12%で回避",
+        Reflect: "Reflect: 8%で弾反射",
+        Regen: "Regen: 撃破時+0.5HP",
+        Speed: "Speed: 移動速度+15%"
+      };
+      return labels[effect];
+    };
+
+    const drawArmor = (armor: Armor, x: number, y: number, label: string, highlight: boolean) => {
+      const color = highlight ? "#f4d35e" : "#cdb4db";
+      makeText(this, x, y, label, 16, color);
+      makeText(this, x, y + 22, `${armor.name}`, 18, "#f8f1ff");
+      makeText(this, x, y + 46, `${armor.rarity}  耐性: ${armor.attribute}`, 14, "#cdb4db");
+      makeText(this, x, y + 66, `防御 ${armor.defense.toFixed(1)}`, 14, "#9ad1ff");
+      makeText(this, x, y + 86, effectLabel(armor.specialEffect), 13, "#80ed99");
+    };
+
+    drawArmor(data.current, cx, cy + 32, "装備中", false);
+    drawArmor(data.found, cx, cy + 150, "発見!", true);
+
+    const equipBtn = this.add.rectangle(panel.x - 70, panel.y + 112, 140, 40, 0x3a254f, 1)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(1, 0xf4d35e);
+    makeText(this, panel.x - 115, panel.y + 100, "装備する", 20, "#f4d35e");
+
+    const skipBtn = this.add.rectangle(panel.x + 80, panel.y + 112, 140, 40, 0x241734, 1)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(1, 0x9d4edd);
+    makeText(this, panel.x + 35, panel.y + 100, "捨てる", 20, "#cdb4db");
+
+    const equip = () => { this.scene.stop(); data.onEquip(); };
+    const skip = () => { this.scene.stop(); data.onSkip(); };
+
+    equipBtn.on("pointerdown", equip);
+    skipBtn.on("pointerdown", skip);
+    this.input.keyboard?.once("keydown-SPACE", equip);
+    this.input.keyboard?.once("keydown-ESC", skip);
+  }
+}
+
 class LevelUpScene extends Phaser.Scene {
   constructor() {
     super("LevelUpScene");
@@ -627,6 +732,7 @@ class DungeonScene extends Phaser.Scene {
   private enemies!: Phaser.Physics.Arcade.Group;
   private chests!: Phaser.Physics.Arcade.StaticGroup;
   private lootDrops!: Phaser.Physics.Arcade.Group;
+  private armorDrops!: Phaser.Physics.Arcade.Group;
   private bossDoors!: Phaser.Physics.Arcade.StaticGroup;
   private hazards!: Phaser.Physics.Arcade.Group;
   private icePillars!: Phaser.Physics.Arcade.StaticGroup;
@@ -639,6 +745,7 @@ class DungeonScene extends Phaser.Scene {
   private wandText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
+  private dangerOverlay!: Phaser.GameObjects.Rectangle;
   private pauseButton!: Phaser.GameObjects.Text;
   private soundButton!: Phaser.GameObjects.Text;
   private joystickBase?: Phaser.GameObjects.Arc;
@@ -677,6 +784,7 @@ class DungeonScene extends Phaser.Scene {
     this.enemyProjectiles = this.physics.add.group();
     this.chests = this.physics.add.staticGroup();
     this.lootDrops = this.physics.add.group();
+    this.armorDrops = this.physics.add.group();
     this.bossDoors = this.physics.add.staticGroup();
     this.hazards = this.physics.add.group();
     this.icePillars = this.physics.add.staticGroup();
@@ -730,6 +838,7 @@ class DungeonScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.enemies, safeCallback(this.onPlayerTouchesEnemy), undefined, this);
     this.physics.add.overlap(this.player, this.chests, safeCallback(this.onLootChest), undefined, this);
     this.physics.add.overlap(this.player, this.lootDrops, safeCallback(this.onCollectLoot), undefined, this);
+    this.physics.add.overlap(this.player, this.armorDrops, safeCallback(this.onCollectArmorDrop), undefined, this);
     this.physics.add.overlap(this.player, this.stairs, safeCallback(this.onReachStairs), undefined, this);
     this.physics.add.overlap(this.player, this.hazards, safeCallback(this.onPlayerTouchesHazard), undefined, this);
     this.physics.add.collider(this.player, this.icePillars);
@@ -754,6 +863,8 @@ class DungeonScene extends Phaser.Scene {
     this.wandText = makeText(this, 16, GAME_HEIGHT - 180, "", 16, "#f8f1ff").setScrollFactor(0);
     this.statusText = makeText(this, 16, 66, "", 16, "#9ad1ff").setScrollFactor(0);
     this.messageText = makeText(this, 24, GAME_HEIGHT - 34, "", 18, "#fff2b2").setScrollFactor(0);
+    this.dangerOverlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xff0000, 0)
+      .setScrollFactor(0).setDepth(15);
     this.soundButton = makeText(this, GAME_WIDTH - 130, GAME_HEIGHT - 90, sfx.muted ? "[x]" : "[♪]", 24, "#f8f1ff")
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
@@ -1085,6 +1196,9 @@ class DungeonScene extends Phaser.Scene {
     let speedMultiplier = this.run.player.iceMs > 0 ? 0.58 : 1;
     if (this.run.player.thunderMs > 0) {
       speedMultiplier *= 0.82;
+    }
+    if (this.run.player.armor.specialEffect === "Speed") {
+      speedMultiplier *= 1.15;
     }
     if (movement.lengthSq() > 0) {
       movement.normalize().scale((BASE_SPEED + this.run.player.stats.S * 10) * speedMultiplier);
@@ -1624,6 +1738,12 @@ class DungeonScene extends Phaser.Scene {
     if (Math.random() < 0.08 + this.run.player.stats.F * 0.01) {
       this.spawnWandDrop(enemy.x, enemy.y, createRandomWand(this.run.floor + this.run.player.stats.F));
     }
+    if (Math.random() < 0.12) {
+      this.spawnArmorDrop(enemy.x + 10, enemy.y, createRandomArmor(this.run.floor + this.run.player.stats.F));
+    }
+    if (this.run.player.armor.specialEffect === "Regen") {
+      this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + 0.5);
+    }
     if (this.run.floor === 60 && (enemy.bossTag === "twin-fire" || enemy.bossTag === "twin-ice")) {
       this.enrageRemainingTwin(enemy);
     }
@@ -1632,6 +1752,7 @@ class DungeonScene extends Phaser.Scene {
       this.stairs.setData("unlocked", true);
       this.stairs.setVisible(true);
       this.spawnWandDrop(enemy.x + 18, enemy.y, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
+      this.spawnArmorDrop(enemy.x - 18, enemy.y, createRandomArmor(this.run.floor + 8 + this.run.player.stats.F));
       this.showMessage("ボス撃破、階段が現れた");
       if (this.run.floor === 100) {
         deleteSave();
@@ -1703,6 +1824,16 @@ class DungeonScene extends Phaser.Scene {
     if (!projectile.active || (projectile as unknown) === this.player) {
       return;
     }
+    if (this.run.player.armor.specialEffect === "Reflect" && Math.random() < 0.08 && projectile.body) {
+      const body = projectile.body as Phaser.Physics.Arcade.Body;
+      body.setVelocity(-body.velocity.x, -body.velocity.y);
+      projectile.owner = "player";
+      (projectile as ProjectileSprite).specialEffects = [];
+      this.enemyProjectiles.remove(projectile, false, false);
+      this.projectiles.add(projectile, false);
+      this.showMessage("弾を反射した!");
+      return;
+    }
     this.damagePlayer(projectile.damage, projectile.attribute, false, `${projectile.attribute}の弾`);
     projectile.destroy();
   }
@@ -1717,6 +1848,12 @@ class DungeonScene extends Phaser.Scene {
       ? (BOSS_PROFILES[this.run.floor]?.name ?? `${enemy.attribute}のボス`)
       : `${enemy.attribute}の${enemy.kind}`;
     this.damagePlayer(6 + this.run.floor * 0.25 + enemy.bossTier * 2, enemy.attribute, false, killerName);
+    if (this.run.player.armor.specialEffect === "Thorns" && enemy.active) {
+      enemy.hp -= 3;
+      if (enemy.hp <= 0) {
+        this.killEnemy(enemy);
+      }
+    }
     const knockback = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y);
     if (knockback.lengthSq() < 1) {
       knockback.set(
@@ -1728,7 +1865,14 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private damagePlayer(amount: number, attribute: Attribute, bypassInvuln: boolean, cause = "不明"): void {
-    const { died, damageDealt } = applyDamage(this.run.player, amount, attribute, bypassInvuln);
+    // Dodge check
+    if (this.run.player.armor.specialEffect === "Dodge" && Math.random() < 0.12) {
+      this.showMessage("回避!");
+      return;
+    }
+    const armorDef = this.run.player.armor.defense +
+      (this.run.player.armor.attribute === attribute && attribute !== "None" ? this.run.player.armor.defense * 0.3 : 0);
+    const { died, damageDealt } = applyDamage(this.run.player, amount, attribute, bypassInvuln, armorDef);
     if (damageDealt > 0) {
       sfx.play("playerHit");
       console.log(`HIT: ${damageDealt.toFixed(1)} ${attribute} hp=${this.run.player.hp.toFixed(1)} died=${died}`);
@@ -1786,8 +1930,9 @@ class DungeonScene extends Phaser.Scene {
     const chest = chestObj as Phaser.Physics.Arcade.Image;
     sfx.play("pickup");
     this.spawnWandDrop(chest.x, chest.y, createRandomWand(this.run.floor + 4 + this.run.player.stats.F));
+    this.spawnArmorDrop(chest.x + 16, chest.y, createRandomArmor(this.run.floor + 4 + this.run.player.stats.F));
     this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + 8);
-    this.showMessage("宝箱からワンドが落ちた");
+    this.showMessage("宝箱からワンドと防具が落ちた");
     chest.destroy();
   }
 
@@ -1984,6 +2129,14 @@ class DungeonScene extends Phaser.Scene {
       return true;
     });
 
+    this.armorDrops.children.iterate((child) => {
+      if (child) {
+        const img = child as Phaser.Physics.Arcade.Image;
+        img.setVisible(fogAt(img.x, img.y) > 0);
+      }
+      return true;
+    });
+
     this.enemies.children.iterate((child) => {
       if (child) {
         const enemy = child as EnemySprite;
@@ -2018,10 +2171,18 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private syncUi(): void {
+    const hpRatio = this.run.player.hp / this.run.player.maxHp;
     this.hpText.setText(`HP ${Math.ceil(this.run.player.hp)} / ${this.run.player.maxHp}`);
+    this.hpText.setColor(hpRatio <= 0.3 ? "#ff4444" : hpRatio <= 0.6 ? "#ffaa44" : "#ffffff");
+    if (hpRatio <= 0.3) {
+      const pulse = 0.08 + Math.sin(this.time.now / 200) * 0.06;
+      this.dangerOverlay.setAlpha(pulse);
+    } else {
+      this.dangerOverlay.setAlpha(0);
+    }
     this.xpText.setText(`LV ${this.run.player.level}  XP ${Math.floor(this.run.player.xp)} / ${this.run.player.nextXp}  SP ${this.run.player.statPoints}`);
     this.floorText.setText(`F ${this.run.floor}`);
-    this.wandText.setText(`${this.run.player.wand.name}  ${this.run.player.wand.rarity}\n${this.run.player.wand.specialEffects.join(", ") || "No Special"}`);
+    this.wandText.setText(`${this.run.player.wand.name}  ${this.run.player.wand.rarity}\n${this.run.player.wand.specialEffects.join(", ") || "No Special"}\n${this.run.player.armor.name}  DEF${this.run.player.armor.defense.toFixed(1)} ${this.run.player.armor.specialEffect ?? ""}`);
     const statuses: string[] = [];
     if (this.run.player.burnMs > 0) statuses.push("Burn");
     if (this.run.player.iceMs > 0) statuses.push("Slow");
@@ -2095,6 +2256,40 @@ class DungeonScene extends Phaser.Scene {
     loot.setScale(1 + rarityValue(wand.rarity) * 0.06);
     loot.setDepth(2);
   }
+
+  private spawnArmorDrop(x: number, y: number, armor: Armor): void {
+    const drop = this.armorDrops.create(x, y, "armor-drop") as LootSprite;
+    drop.lootType = "armor";
+    drop.armor = armor;
+    drop.setTint(attributeColor(armor.attribute));
+    drop.setScale(1 + rarityValue(armor.rarity) * 0.06);
+    drop.setDepth(2);
+  }
+
+  private onCollectArmorDrop(_: Phaser.GameObjects.GameObject, armorObj: Phaser.GameObjects.GameObject): void {
+    const drop = armorObj as LootSprite;
+    if (!drop.active || this.scene.isActive("ArmorCompareScene")) {
+      return;
+    }
+    drop.disableBody(true, false);
+    this.scene.pause();
+    this.scene.launch("ArmorCompareScene", {
+      current: this.run.player.armor,
+      found: drop.armor,
+      onEquip: () => {
+        sfx.play("pickup");
+        this.run.player.armor = drop.armor;
+        this.showMessage(`${drop.armor.rarity} ${drop.armor.name} を装備した`);
+        drop.destroy();
+        this.scene.resume();
+      },
+      onSkip: () => {
+        this.showMessage(`${drop.armor.name} を捨てた`);
+        drop.destroy();
+        this.scene.resume();
+      }
+    });
+  }
 }
 
 function roomCenter(room: Room): Phaser.Math.Vector2 {
@@ -2133,7 +2328,7 @@ export function createGame(container: string): Phaser.Game {
         debug: false
       }
     },
-    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, WandCompareScene, PauseScene, GameOverScene, EndingScene],
+    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, WandCompareScene, ArmorCompareScene, PauseScene, GameOverScene, EndingScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH

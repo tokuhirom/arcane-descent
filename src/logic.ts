@@ -29,14 +29,15 @@ export function applyDamage(
   player: PlayerState,
   amount: number,
   attribute: Attribute,
-  bypassInvuln: boolean
+  bypassInvuln: boolean,
+  armorDefense = 0
 ): { died: boolean; damageDealt: number } {
   if (!bypassInvuln && player.hitInvulnMs > 0) {
     return { died: false, damageDealt: 0 };
   }
 
   const { vitalityReduction, poisonPenalty } = computeDamageReduction(player.stats.V, player.defenseBreak);
-  const actualDamage = amount * vitalityReduction * poisonPenalty;
+  const actualDamage = Math.max(1, amount * vitalityReduction * poisonPenalty - armorDefense);
   player.hp -= actualDamage;
   if (!bypassInvuln) {
     player.hitInvulnMs = 450;
