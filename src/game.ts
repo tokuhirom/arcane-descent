@@ -116,7 +116,7 @@ interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
   chainHits: number;
 }
 
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 
 interface RunState {
   saveVersion: number;
@@ -218,7 +218,7 @@ function createStarterState(): RunState {
         S: 4,
         T: 4
       },
-      weapon: createRandomWand(1, true),
+      weapon: { type: "melee" as const, name: "錆びた剣", attribute: "None" as Attribute, rarity: "Common" as Rarity, damage: 10, range: 44, swingRate: 500, arc: 120, specialEffects: [] },
       armor: createDefaultArmor(),
       burnMs: 0,
       iceMs: 0,
@@ -300,7 +300,9 @@ function createRandomWand(floor: number, starter = false): Wand {
   };
 }
 
-function createRandomMelee(floor: number): MeleeWeapon {
+type MeleeStyle = "sword" | "spear";
+
+function createRandomMelee(floor: number, style?: MeleeStyle): MeleeWeapon {
   const fortuneBonus = Math.floor(floor / 25);
   const rarityRoll = Phaser.Math.Between(0, 100) + fortuneBonus * 8;
   const rarity: Rarity =
@@ -314,13 +316,32 @@ function createRandomMelee(floor: number): MeleeWeapon {
   const effects = Phaser.Utils.Array.Shuffle([...SPECIAL_EFFECTS]).slice(0, effectCount);
   const attribute = pick(ATTRIBUTES);
   const hasMultishot = effects.includes("Multishot");
-  const baseDamage = (12 + floor * 1.0 + rarityIndex * 6) * (hasMultishot ? 0.5 : 1);
-  const baseNames = ["剣", "斧", "鎌"];
-  const multishotNames = ["連撃の剣", "旋風斧", "乱舞の鎌"];
-  const nameIdx = Phaser.Math.Between(0, 2);
-  const weaponName = hasMultishot
-    ? multishotNames[nameIdx]
-    : `${attribute === "None" ? "魔力" : attribute}の${baseNames[nameIdx]}`;
+  const meleeStyle = style ?? (Math.random() < 0.4 ? "spear" : "sword");
+
+  let baseDamage: number;
+  let range: number;
+  let arc: number;
+  let swingRate: number;
+  let weaponName: string;
+  const attrLabel = attribute === "None" ? "魔力" : attribute;
+
+  if (meleeStyle === "spear") {
+    // 槍: 長射程・狭角・低ダメージ・速い振り
+    baseDamage = (8 + floor * 0.7 + rarityIndex * 4) * (hasMultishot ? 0.5 : 1);
+    range = 72 + rarityIndex * 8;
+    arc = hasMultishot ? 120 : 30;
+    swingRate = Math.max(200, 450 - floor * 2 - rarityIndex * 35);
+    const spearNames = hasMultishot ? ["連突の槍", "旋槍", "乱槍"] : ["槍", "長槍", "戟"];
+    weaponName = hasMultishot ? spearNames[Phaser.Math.Between(0, 2)] : `${attrLabel}の${spearNames[Phaser.Math.Between(0, 2)]}`;
+  } else {
+    // 剣: 短射程・広角・高ダメージ
+    baseDamage = (12 + floor * 1.0 + rarityIndex * 6) * (hasMultishot ? 0.5 : 1);
+    range = 48 + rarityIndex * 6;
+    arc = hasMultishot ? 360 : 120;
+    swingRate = Math.max(250, 550 - floor * 2 - rarityIndex * 40);
+    const swordNames = hasMultishot ? ["連撃の剣", "旋風斧", "乱舞の鎌"] : ["剣", "斧", "鎌"];
+    weaponName = hasMultishot ? swordNames[Phaser.Math.Between(0, 2)] : `${attrLabel}の${swordNames[Phaser.Math.Between(0, 2)]}`;
+  }
 
   return {
     type: "melee" as const,
@@ -328,9 +349,9 @@ function createRandomMelee(floor: number): MeleeWeapon {
     attribute,
     rarity,
     damage: baseDamage,
-    range: 48 + rarityIndex * 6,
-    swingRate: Math.max(250, 550 - floor * 2 - rarityIndex * 40),
-    arc: hasMultishot ? 360 : 120,
+    range,
+    swingRate,
+    arc,
     specialEffects: effects
   };
 }
