@@ -26,6 +26,7 @@ type FogState = 0 | 1 | 2;
 type Rarity = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary";
 type SpecialEffect = "Multishot" | "Homing" | "Explosion" | "Chain" | "Lifesteal";
 interface Wand {
+  type: "ranged";
   name: string;
   attribute: Attribute;
   rarity: Rarity;
@@ -38,6 +39,28 @@ interface Wand {
   specialEffects: SpecialEffect[];
 }
 
+interface MeleeWeapon {
+  type: "melee";
+  name: string;
+  attribute: Attribute;
+  rarity: Rarity;
+  damage: number;
+  range: number;
+  swingRate: number;
+  arc: number;
+  specialEffects: SpecialEffect[];
+}
+
+type Weapon = Wand | MeleeWeapon;
+
+function isWand(w: Weapon): w is Wand {
+  return w.type === "ranged";
+}
+
+function isMelee(w: Weapon): w is MeleeWeapon {
+  return w.type === "melee";
+}
+
 type ArmorEffect = "Thorns" | "Dodge" | "Reflect" | "Regen" | "Speed";
 interface Armor {
   name: string;
@@ -48,7 +71,7 @@ interface Armor {
 }
 
 interface GamePlayerState extends PlayerState {
-  wand: Wand;
+  weapon: Weapon;
   armor: Armor;
 }
 
@@ -91,14 +114,18 @@ interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
   chainHits: number;
 }
 
+const SAVE_VERSION = 3;
+
 interface RunState {
+  saveVersion: number;
   floor: number;
   player: GamePlayerState;
 }
 
 interface LootSprite extends Phaser.Physics.Arcade.Image {
-  lootType: "wand" | "armor";
+  lootType: "wand" | "melee" | "armor";
   wand: Wand;
+  melee: MeleeWeapon;
   armor: Armor;
 }
 
@@ -171,6 +198,7 @@ function clampStat(value: number): number {
 
 function createStarterState(): RunState {
   return {
+    saveVersion: SAVE_VERSION,
     floor: 1,
     player: {
       hp: 36,
@@ -188,7 +216,7 @@ function createStarterState(): RunState {
         S: 4,
         T: 4
       },
-      wand: createRandomWand(1, true),
+      weapon: createRandomWand(1, true),
       armor: createDefaultArmor(),
       burnMs: 0,
       iceMs: 0,
@@ -206,6 +234,7 @@ const SAVE_KEY = "arcane-descent-save";
 
 function saveRun(run: RunState): void {
   try {
+    run.saveVersion = SAVE_VERSION;
     localStorage.setItem(SAVE_KEY, JSON.stringify(run));
   } catch { /* quota exceeded etc */ }
 }
@@ -215,7 +244,7 @@ function loadRun(): RunState | null {
     const data = localStorage.getItem(SAVE_KEY);
     if (!data) return null;
     const run = JSON.parse(data) as RunState;
-    if (!run.player || !run.floor) return null;
+    if (!run.player || !run.floor || run.saveVersion !== SAVE_VERSION) return null;
     // ステータス異常・無敵をリセット
     run.player.burnMs = 0;
     run.player.iceMs = 0;
@@ -255,6 +284,7 @@ function createRandomWand(floor: number, starter = false): Wand {
   const wandType = hasMultishot ? ["連弾杖", "乱魔杖", "散華の杖"] : ["ワンド", "杖", "呪具"];
 
   return {
+    type: "ranged" as const,
     name: `${attribute === "None" ? "魔力" : attribute}の${wandType[Phaser.Math.Between(0, 2)]}`,
     attribute,
     rarity,
@@ -264,6 +294,41 @@ function createRandomWand(floor: number, starter = false): Wand {
       projectileSpeed: 340 + rarityIndex * 40,
       piercing: 1 + (effects.includes("Chain") ? 1 : 0)
     },
+    specialEffects: effects
+  };
+}
+
+function createRandomMelee(floor: number): MeleeWeapon {
+  const fortuneBonus = Math.floor(floor / 25);
+  const rarityRoll = Phaser.Math.Between(0, 100) + fortuneBonus * 8;
+  const rarity: Rarity =
+    rarityRoll > 98 ? "Legendary" :
+    rarityRoll > 88 ? "Epic" :
+    rarityRoll > 72 ? "Rare" :
+    rarityRoll > 44 ? "Uncommon" : "Common";
+
+  const rarityIndex = rarityValue(rarity);
+  const effectCount = Math.max(0, rarityIndex - 1);
+  const effects = Phaser.Utils.Array.Shuffle([...SPECIAL_EFFECTS]).slice(0, effectCount);
+  const attribute = pick(ATTRIBUTES);
+  const hasMultishot = effects.includes("Multishot");
+  const baseDamage = (12 + floor * 1.0 + rarityIndex * 6) * (hasMultishot ? 0.5 : 1);
+  const baseNames = ["剣", "斧", "鎌"];
+  const multishotNames = ["連撃の剣", "旋風斧", "乱舞の鎌"];
+  const nameIdx = Phaser.Math.Between(0, 2);
+  const weaponName = hasMultishot
+    ? multishotNames[nameIdx]
+    : `${attribute === "None" ? "魔力" : attribute}の${baseNames[nameIdx]}`;
+
+  return {
+    type: "melee" as const,
+    name: weaponName,
+    attribute,
+    rarity,
+    damage: baseDamage,
+    range: 48 + rarityIndex * 6,
+    swingRate: Math.max(250, 550 - floor * 2 - rarityIndex * 40),
+    arc: hasMultishot ? 360 : 120,
     specialEffects: effects
   };
 }
@@ -553,12 +618,12 @@ class StairsConfirmScene extends Phaser.Scene {
   }
 }
 
-class WandCompareScene extends Phaser.Scene {
+class WeaponCompareScene extends Phaser.Scene {
   constructor() {
-    super("WandCompareScene");
+    super("WeaponCompareScene");
   }
 
-  create(data: { current: Wand; found: Wand; pStat: number; sStat: number; onEquip: () => void; onSkip: () => void }): void {
+  create(data: { current: Weapon; found: Weapon; pStat: number; sStat: number; onEquip: () => void; onSkip: () => void }): void {
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6);
     const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 380, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
@@ -566,29 +631,39 @@ class WandCompareScene extends Phaser.Scene {
     const cx = panel.x - 200;
     const cy = panel.y - 160;
 
-    makeText(this, cx, cy, "ワンド比較", 24, "#f8f1ff");
+    makeText(this, cx, cy, "武器比較", 24, "#f8f1ff");
 
-    const calcDps = (wand: Wand): number => {
-      const dmg = wand.stats.damage * (1 + data.pStat * 0.08);
-      const interval = Math.max(120, wand.stats.fireRate - data.sStat * 12);
-      const shots = wand.specialEffects.includes("Multishot") ? 3 : 1;
-      return dmg * shots / (interval / 1000);
+    const calcDps = (weapon: Weapon): number => {
+      if (isWand(weapon)) {
+        const dmg = weapon.stats.damage * (1 + data.pStat * 0.08);
+        const interval = Math.max(120, weapon.stats.fireRate - data.sStat * 12);
+        const shots = weapon.specialEffects.includes("Multishot") ? 3 : 1;
+        return dmg * shots / (interval / 1000);
+      } else {
+        const dmg = weapon.damage * (1 + data.pStat * 0.08);
+        const interval = Math.max(150, weapon.swingRate - data.sStat * 12);
+        return dmg * 1.5 / (interval / 1000);
+      }
     };
 
-    const drawWand = (wand: Wand, x: number, y: number, label: string, highlight: boolean) => {
+    const drawWeapon = (weapon: Weapon, x: number, y: number, label: string, highlight: boolean) => {
       const color = highlight ? "#f4d35e" : "#cdb4db";
       makeText(this, x, y, label, 16, color);
-      makeText(this, x, y + 22, `${wand.name}`, 18, "#f8f1ff");
-      makeText(this, x, y + 46, `${wand.rarity}  ${wand.attribute}`, 14, "#cdb4db");
-      makeText(this, x, y + 66, `攻撃 ${wand.stats.damage.toFixed(1)}  速度 ${wand.stats.fireRate}  貫通 ${wand.stats.piercing}`, 14, "#9ad1ff");
-      const dps = calcDps(wand);
+      makeText(this, x, y + 22, `${weapon.name}`, 18, "#f8f1ff");
+      makeText(this, x, y + 46, `${weapon.rarity}  ${weapon.attribute}`, 14, "#cdb4db");
+      if (isWand(weapon)) {
+        makeText(this, x, y + 66, `攻撃 ${weapon.stats.damage.toFixed(1)}  速度 ${weapon.stats.fireRate}  貫通 ${weapon.stats.piercing}`, 14, "#9ad1ff");
+      } else {
+        makeText(this, x, y + 66, `攻撃 ${weapon.damage.toFixed(1)}  振速 ${weapon.swingRate}  範囲 ${weapon.range}`, 14, "#9ad1ff");
+      }
+      const dps = calcDps(weapon);
       makeText(this, x, y + 86, `DPS ${dps.toFixed(1)}`, 15, "#ff6b6b");
-      const fx = wand.specialEffects.length > 0 ? wand.specialEffects.join(", ") : "-";
+      const fx = weapon.specialEffects.length > 0 ? weapon.specialEffects.join(", ") : "-";
       makeText(this, x, y + 104, fx, 13, "#80ed99");
     };
 
-    drawWand(data.current, cx, cy + 36, "装備中", false);
-    drawWand(data.found, cx, cy + 170, "発見!", true);
+    drawWeapon(data.current, cx, cy + 36, "装備中", false);
+    drawWeapon(data.found, cx, cy + 170, "発見!", true);
 
     const equipBtn = this.add.rectangle(panel.x - 70, panel.y + 130, 140, 40, 0x3a254f, 1)
       .setInteractive({ useHandCursor: true })
@@ -1396,12 +1471,120 @@ class DungeonScene extends Phaser.Scene {
       Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
       Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
     );
-    const target = activeEnemies[0];
-    this.spawnPlayerProjectile(target.x, target.y, this.run.player.wand.specialEffects);
-    this.fireTimer = Math.max(120, this.run.player.wand.stats.fireRate - this.run.player.stats.S * 12);
+
+    const weapon = this.run.player.weapon;
+    if (isWand(weapon)) {
+      const target = activeEnemies[0];
+      this.spawnPlayerProjectile(target.x, target.y, weapon.specialEffects);
+      this.fireTimer = Math.max(120, weapon.stats.fireRate - this.run.player.stats.S * 12);
+    } else {
+      // Melee attack
+      const target = activeEnemies[0];
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
+      if (dist > weapon.range) {
+        return;
+      }
+      this.performMeleeSwing(weapon);
+      this.fireTimer = Math.max(150, weapon.swingRate - this.run.player.stats.S * 12);
+    }
+  }
+
+  private performMeleeSwing(weapon: MeleeWeapon): void {
+    sfx.play("shoot");
+    const baseDamage = weapon.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 1.5 : 1);
+
+    // Find closest enemy to determine swing direction
+    const activeEnemies = (this.enemies.getChildren() as EnemySprite[])
+      .filter((e) => e.active && e.visible && e.activeRoom);
+    if (activeEnemies.length === 0) return;
+    activeEnemies.sort((a, b) =>
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
+    );
+    const primary = activeEnemies[0];
+    const swingAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, primary.x, primary.y);
+    const halfArc = Phaser.Math.DegToRad(weapon.arc / 2);
+
+    // Show swing visual
+    this.showMeleeArc(swingAngle, weapon.range, weapon.arc, weapon.attribute);
+
+    // Damage all enemies within arc and range
+    (this.enemies.getChildren() as EnemySprite[]).forEach((enemy) => {
+      if (!enemy.active) return;
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+      if (dist > weapon.range) return;
+
+      // Check if within arc (360 = full circle, always hits)
+      if (weapon.arc < 360) {
+        const angleToEnemy = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+        let angleDiff = angleToEnemy - swingAngle;
+        // Normalize to [-PI, PI]
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        if (Math.abs(angleDiff) > halfArc) return;
+      }
+
+      let damage = baseDamage;
+      if (weapon.attribute === enemy.weakness) damage *= 1.5;
+      if (weapon.attribute === enemy.resistance) damage *= 0.5;
+      damage *= 1 + enemy.defenseBreak;
+      if (weapon.attribute === "Poison") damage *= 1.05 + this.run.player.stats.A * 0.01;
+      if (weapon.attribute === "Fire") damage += 2 + this.run.player.stats.A * 0.2;
+      if (weapon.attribute === "Thunder" && Math.random() < 0.15) enemy.stunMs = Math.max(enemy.stunMs, 250 + this.run.player.stats.A * 20);
+      if (Math.random() < this.run.player.stats.T * 0.015) {
+        damage *= 1.7;
+        this.showCritEffect(enemy);
+      }
+
+      if (weapon.attribute === "Fire") {
+        enemy.burnMs = Math.max(enemy.burnMs, 2800 + this.run.player.stats.A * 70);
+      } else if (weapon.attribute === "Ice") {
+        enemy.slowMs = Math.max(enemy.slowMs, 2600 + this.run.player.stats.A * 60);
+      } else if (weapon.attribute === "Poison") {
+        enemy.defenseBreak = Math.min(0.5, enemy.defenseBreak + 0.08);
+      }
+
+      enemy.hp -= damage;
+      sfx.play("enemyHit");
+
+      if (weapon.specialEffects.includes("Explosion")) {
+        this.damageNearbyEnemies(enemy.x, enemy.y, damage * 0.35, 42);
+      }
+      if (weapon.specialEffects.includes("Lifesteal")) {
+        this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + damage * 0.05);
+      }
+
+      if (enemy.hp <= 0) {
+        this.killEnemy(enemy);
+      }
+    });
+  }
+
+  private showMeleeArc(angle: number, range: number, arcDeg: number, attribute: Attribute): void {
+    const g = this.add.graphics();
+    const color = attributeColor(attribute);
+    g.fillStyle(color, 0.35);
+    g.setDepth(4);
+
+    if (arcDeg >= 360) {
+      g.fillCircle(this.player.x, this.player.y, range);
+    } else {
+      const startAngle = angle - Phaser.Math.DegToRad(arcDeg / 2);
+      g.slice(this.player.x, this.player.y, range, startAngle, startAngle + Phaser.Math.DegToRad(arcDeg), false);
+      g.fillPath();
+    }
+
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 100,
+      onComplete: () => g.destroy()
+    });
   }
 
   private spawnPlayerProjectile(targetX: number, targetY: number, effects: SpecialEffect[]): void {
+    const weapon = this.run.player.weapon;
+    if (!isWand(weapon)) return;
     sfx.play("shoot");
     const shots = effects.includes("Multishot") ? 3 : 1;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, targetX, targetY);
@@ -1409,9 +1592,9 @@ class DungeonScene extends Phaser.Scene {
       const spread = shots === 1 ? 0 : Phaser.Math.DegToRad((i - 1) * 12);
       const projectile = this.projectiles.create(this.player.x, this.player.y, "projectile") as ProjectileSprite;
       projectile.owner = "player";
-      projectile.damage = this.run.player.wand.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 1.5 : 1);
-      projectile.piercing = this.run.player.wand.stats.piercing;
-      projectile.attribute = this.run.player.wand.attribute;
+      projectile.damage = weapon.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 1.5 : 1);
+      projectile.piercing = weapon.stats.piercing;
+      projectile.attribute = weapon.attribute;
       projectile.specialEffects = [...effects];
       projectile.lifetimeMs = 1200;
       projectile.chainHits = 0;
@@ -1420,7 +1603,7 @@ class DungeonScene extends Phaser.Scene {
       if (projectile.body) {
         this.physics.velocityFromRotation(
           baseAngle + spread,
-          this.run.player.wand.stats.projectileSpeed + this.run.player.stats.S * 8,
+          weapon.stats.projectileSpeed + this.run.player.stats.S * 8,
           (projectile.body as Phaser.Physics.Arcade.Body).velocity
         );
       }
@@ -1897,7 +2080,11 @@ class DungeonScene extends Phaser.Scene {
     const gainedXp = 5 + Math.floor(this.run.floor / 2) + Math.floor(this.run.player.stats.A * 0.6);
     this.run.player.xp += gainedXp;
     if (Math.random() < 0.08 + this.run.player.stats.F * 0.01) {
-      this.spawnWandDrop(enemy.x, enemy.y, createRandomWand(this.run.floor + this.run.player.stats.F));
+      if (Math.random() < 0.5) {
+        this.spawnWandDrop(enemy.x, enemy.y, createRandomWand(this.run.floor + this.run.player.stats.F));
+      } else {
+        this.spawnMeleeDrop(enemy.x, enemy.y, createRandomMelee(this.run.floor + this.run.player.stats.F));
+      }
     }
     if (Math.random() < 0.12) {
       this.spawnArmorDrop(enemy.x + 10, enemy.y, createRandomArmor(this.run.floor + this.run.player.stats.F));
@@ -1915,7 +2102,11 @@ class DungeonScene extends Phaser.Scene {
       this.bossDoors.clear(true, true);
       this.stairs.setData("unlocked", true);
       this.stairs.setVisible(true);
-      this.spawnWandDrop(enemy.x + 48, enemy.y - 36, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
+      if (Math.random() < 0.5) {
+        this.spawnWandDrop(enemy.x + 48, enemy.y - 36, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
+      } else {
+        this.spawnMeleeDrop(enemy.x + 48, enemy.y - 36, createRandomMelee(this.run.floor + 8 + this.run.player.stats.F));
+      }
       this.spawnArmorDrop(enemy.x - 48, enemy.y - 36, createRandomArmor(this.run.floor + 8 + this.run.player.stats.F));
       this.showMessage("ボス撃破、階段が現れた");
       if (this.run.floor === 100) {
@@ -2095,34 +2286,39 @@ class DungeonScene extends Phaser.Scene {
   private onLootChest(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
     const chest = (obj1 === this.player ? obj2 : obj1) as Phaser.Physics.Arcade.Image;
     sfx.play("pickup");
-    this.spawnWandDrop(chest.x, chest.y, createRandomWand(this.run.floor + 4 + this.run.player.stats.F));
+    if (Math.random() < 0.5) {
+      this.spawnWandDrop(chest.x, chest.y, createRandomWand(this.run.floor + 4 + this.run.player.stats.F));
+    } else {
+      this.spawnMeleeDrop(chest.x, chest.y, createRandomMelee(this.run.floor + 4 + this.run.player.stats.F));
+    }
     this.spawnArmorDrop(chest.x + 16, chest.y, createRandomArmor(this.run.floor + 4 + this.run.player.stats.F));
     this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + 8);
-    this.showMessage("宝箱からワンドと防具が落ちた");
+    this.showMessage("宝箱から武器と防具が落ちた");
     chest.destroy();
   }
 
   private onCollectLoot(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
     const loot = (obj1 === this.player ? obj2 : obj1) as LootSprite;
-    if (!loot.active || (loot as unknown) === this.player || this.scene.isActive("WandCompareScene")) {
+    if (!loot.active || (loot as unknown) === this.player || this.scene.isActive("WeaponCompareScene")) {
       return;
     }
     loot.disableBody(true, false);
+    const foundWeapon: Weapon = loot.lootType === "melee" ? loot.melee : loot.wand;
     this.scene.pause();
-    this.scene.launch("WandCompareScene", {
-      current: this.run.player.wand,
-      found: loot.wand,
+    this.scene.launch("WeaponCompareScene", {
+      current: this.run.player.weapon,
+      found: foundWeapon,
       pStat: this.run.player.stats.P,
       sStat: this.run.player.stats.S,
       onEquip: () => {
         sfx.play("pickup");
-        this.run.player.wand = loot.wand;
-        this.showMessage(`${loot.wand.rarity} ${loot.wand.name} を装備した`);
+        this.run.player.weapon = foundWeapon;
+        this.showMessage(`${foundWeapon.rarity} ${foundWeapon.name} を装備した`);
         loot.destroy();
         this.scene.resume();
       },
       onSkip: () => {
-        this.showMessage(`${loot.wand.name} を捨てた`);
+        this.showMessage(`${foundWeapon.name} を捨てた`);
         loot.destroy();
         this.scene.resume();
       }
@@ -2370,7 +2566,11 @@ class DungeonScene extends Phaser.Scene {
     }
     this.xpText.setText(`LV ${this.run.player.level}  XP ${Math.floor(this.run.player.xp)} / ${this.run.player.nextXp}  SP ${this.run.player.statPoints}`);
     this.floorText.setText(`F ${this.run.floor}`);
-    this.wandText.setText(`${this.run.player.wand.name}  ${this.run.player.wand.rarity}\n${this.run.player.wand.specialEffects.join(", ") || "No Special"}\n${this.run.player.armor.name}  DEF${this.run.player.armor.defense.toFixed(1)} ${this.run.player.armor.specialEffect ?? ""}`);
+    const w = this.run.player.weapon;
+    const weaponLine = `${w.name}  ${w.rarity}`;
+    const fxLine = w.specialEffects.join(", ") || "No Special";
+    const armorLine = `${this.run.player.armor.name}  DEF${this.run.player.armor.defense.toFixed(1)} ${this.run.player.armor.specialEffect ?? ""}`;
+    this.wandText.setText(`${weaponLine}\n${fxLine}\n${armorLine}`);
     const statuses: string[] = [];
     if (this.run.player.burnMs > 0) statuses.push("Burn");
     if (this.run.player.iceMs > 0) statuses.push("Slow");
@@ -2482,6 +2682,16 @@ class DungeonScene extends Phaser.Scene {
     loot.wand = wand;
     loot.setTint(attributeColor(wand.attribute));
     loot.setScale(1 + rarityValue(wand.rarity) * 0.06);
+    loot.setDepth(2);
+  }
+
+  private spawnMeleeDrop(x: number, y: number, melee: MeleeWeapon): void {
+    const pos = this.findWalkableNear(x, y);
+    const loot = this.lootDrops.create(pos.x, pos.y, "wand-drop") as LootSprite;
+    loot.lootType = "melee";
+    loot.melee = melee;
+    loot.setTint(attributeColor(melee.attribute));
+    loot.setScale(1 + rarityValue(melee.rarity) * 0.06);
     loot.setDepth(2);
   }
 
@@ -2599,7 +2809,7 @@ export function createGame(container: string): Phaser.Game {
         debug: false
       }
     },
-    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, WandCompareScene, ArmorCompareScene, PauseScene, GameOverScene, EndingScene],
+    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, WeaponCompareScene, ArmorCompareScene, PauseScene, GameOverScene, EndingScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
