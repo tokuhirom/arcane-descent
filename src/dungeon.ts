@@ -297,7 +297,8 @@ export function generateDungeon(floor: number): DungeonLayout {
     }
 
     const area = room.width * room.height;
-    const baseCount = Math.max(1, Math.floor(area / 20) + randomBetween(-1, 1));
+    const floorScale = Math.min(1, 0.4 + floor * 0.06);
+    const baseCount = Math.max(1, Math.floor(area / 25 * floorScale) + randomBetween(-1, 1));
     const count = room.kind === "stairs" ? Math.max(1, baseCount - 1) : baseCount;
     for (let i = 0; i < count; i += 1) {
       const margin = room.kind === "stairs" ? 2 : 1;
