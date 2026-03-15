@@ -20,6 +20,13 @@ document.documentElement.style.touchAction = "none";
 document.body.style.overscrollBehavior = "none";
 document.body.style.touchAction = "none";
 
+// Prevent Android back gesture by keeping a dummy history entry
+// When swiped back, popstate fires and we just re-push the dummy state
+history.pushState({ game: true }, "");
+window.addEventListener("popstate", () => {
+  history.pushState({ game: true }, "");
+});
+
 try {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nav = (window as any).navigation;
