@@ -97,6 +97,8 @@ interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
   splitDepth: number;
   bossTag?: string;
   isDecoy?: boolean;
+  selfDestructed?: boolean;
+  enraged?: boolean;
   bossAbilityCd: number;
   strafeDir: number;
   zigzagTimer: number;
@@ -279,7 +281,7 @@ function createRandomWand(floor: number, starter = false): Wand {
   const effects = Phaser.Utils.Array.Shuffle([...SPECIAL_EFFECTS]).slice(0, effectCount);
   const attribute = starter ? "None" : pick(ATTRIBUTES);
   const hasMultishot = effects.includes("Multishot");
-  const damage = (8 + floor * 0.7 + rarityIndex * 4) * (hasMultishot ? 0.4 : 1);
+  const damage = (5 + floor * 0.5 + rarityIndex * 3) * (hasMultishot ? 0.4 : 1);
   const fireRate = Math.max(180, 520 - floor * 2 - rarityIndex * 45);
   const wandType = hasMultishot ? ["連弾杖", "乱魔杖", "散華の杖"] : ["ワンド", "杖", "呪具"];
 
@@ -424,6 +426,32 @@ class BootScene extends Phaser.Scene {
     g.fillCircle(10, 10, 6);
     g.fillCircle(17, 4, 3);
     g.generateTexture("enemy-summoner", 20, 20);
+    g.clear();
+
+    // Guardian: shield-like shape (filled square with a cross)
+    g.fillStyle(0xd4a574, 1);
+    g.fillRect(2, 2, 16, 16);
+    g.lineStyle(2, 0x8b6914, 1);
+    g.beginPath();
+    g.moveTo(10, 2);
+    g.lineTo(10, 18);
+    g.moveTo(2, 10);
+    g.lineTo(18, 10);
+    g.strokePath();
+    g.generateTexture("enemy-guardian", 20, 20);
+    g.clear();
+
+    // Bomber: red circle with yellow X
+    g.fillStyle(0xff4444, 1);
+    g.fillCircle(10, 10, 8);
+    g.lineStyle(2, 0xffff00, 1);
+    g.beginPath();
+    g.moveTo(5, 5);
+    g.lineTo(15, 15);
+    g.moveTo(15, 5);
+    g.lineTo(5, 15);
+    g.strokePath();
+    g.generateTexture("enemy-bomber", 20, 20);
     g.clear();
 
     g.fillStyle(0xfff3b0, 1);
@@ -1092,9 +1120,9 @@ class DungeonScene extends Phaser.Scene {
       enemy.attribute = bossProfile?.attribute ?? pick(ATTRIBUTES);
       enemy.weakness = pick(ATTRIBUTES);
       enemy.resistance = pick(ATTRIBUTES);
-      enemy.maxHp = (18 + this.run.floor * 2 + (spawn.elite ? 24 : 0)) * (bossProfile?.maxHpMultiplier ?? 1);
+      enemy.maxHp = (18 + this.run.floor * 2 + (spawn.elite ? 24 : 0)) * (bossProfile?.maxHpMultiplier ?? 1) * (enemy.kind === "guardian" ? 1.5 : 1);
       enemy.hp = enemy.maxHp;
-      enemy.speed = (50 + this.run.floor * 1.2 + (enemy.kind === "rusher" ? 25 : 0) + (spawn.elite ? 22 : 0)) * (bossProfile?.speedMultiplier ?? 1);
+      enemy.speed = (50 + this.run.floor * 1.2 + (enemy.kind === "rusher" ? 25 : 0) + (enemy.kind === "guardian" ? -10 : 0) + (spawn.elite ? 22 : 0)) * (bossProfile?.speedMultiplier ?? 1);
       enemy.burnMs = 0;
       enemy.slowMs = 0;
       enemy.stunMs = 0;
@@ -1737,6 +1765,63 @@ class DungeonScene extends Phaser.Scene {
           const speed = enemy.chargeTimer <= -2 ? enemy.speed * 3 : enemy.speed * 0.7;
           this.safeSetVelocity(enemy,direction.x * speed * speedMultiplier * bossPhaseMultiplier, direction.y * speed * speedMultiplier * bossPhaseMultiplier);
         }
+      } else if (enemy.kind === "guardian") {
+        // Guardian: slow chaser that performs melee swings
+        const guardianSpeed = enemy.speed * 0.7;
+        this.safeSetVelocity(enemy,direction.x * guardianSpeed * speedMultiplier * bossPhaseMultiplier, direction.y * guardianSpeed * speedMultiplier * bossPhaseMultiplier);
+        if (distance < 40 && enemy.fireCooldown <= 0) {
+          const swingAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+          const arcG = this.add.graphics();
+          arcG.fillStyle(attributeColor(enemy.attribute), 0.35);
+          arcG.setDepth(4);
+          arcG.slice(enemy.x, enemy.y, 40, swingAngle - Phaser.Math.DegToRad(45), swingAngle + Phaser.Math.DegToRad(45), false);
+          arcG.fillPath();
+          this.tweens.add({ targets: arcG, alpha: 0, duration: 100, onComplete: () => arcG.destroy() });
+          const guardianDmg = 8 + this.run.floor * 0.5;
+          this.damagePlayer(guardianDmg, enemy.attribute, false, `${enemy.attribute}のguardian`);
+          enemy.fireCooldown = 800;
+        }
+      } else if (enemy.kind === "bomber") {
+        // Bomber: chases player, self-destructs when low HP and close
+        const hpRatio = enemy.hp / enemy.maxHp;
+        const bomberSpeed = hpRatio < 0.3 ? enemy.speed * 2 : enemy.speed;
+        this.safeSetVelocity(enemy,direction.x * bomberSpeed * speedMultiplier * bossPhaseMultiplier, direction.y * bomberSpeed * speedMultiplier * bossPhaseMultiplier);
+
+        // Enraged visual: flash red when below 30% HP
+        if (hpRatio < 0.3 && !enemy.enraged) {
+          enemy.enraged = true;
+        }
+        if (enemy.enraged) {
+          if (Math.floor(this.time.now / 150) % 2 === 0) {
+            enemy.setTintFill(0xff0000);
+          } else {
+            enemy.clearTint();
+            enemy.setTint(attributeColor(enemy.attribute));
+          }
+        }
+
+        // Self-destruct check
+        if (hpRatio < 0.3 && distance < 60) {
+          const explosionDmg = 15 + this.run.floor * 0.8;
+          this.damagePlayer(explosionDmg, enemy.attribute, false, `${enemy.attribute}のbomber爆発`);
+          // Explosion visual
+          const explG = this.add.graphics();
+          explG.fillStyle(0xff4444, 0.5);
+          explG.fillCircle(enemy.x, enemy.y, 10);
+          explG.setDepth(4);
+          this.tweens.add({
+            targets: explG,
+            scaleX: 4,
+            scaleY: 4,
+            alpha: 0,
+            duration: 300,
+            onComplete: () => explG.destroy()
+          });
+          sfx.play("enemyDeath");
+          enemy.selfDestructed = true;
+          this.killEnemy(enemy);
+          return true;
+        }
       }
 
       if (enemy.kind === "summoner" && enemy.summonCooldown <= 0) {
@@ -2074,22 +2159,23 @@ class DungeonScene extends Phaser.Scene {
     });
   }
 
-  private killEnemy(enemy: EnemySprite): void {
+  private killEnemy(enemy: EnemySprite, skipDrops = false): void {
     sfx.play("enemyDeath");
     healOnKill(this.run.player);
     const gainedXp = 5 + Math.floor(this.run.floor / 2) + Math.floor(this.run.player.stats.A * 0.6);
     this.run.player.xp += gainedXp;
-    if (Math.random() < 0.08 + this.run.player.stats.F * 0.01) {
+    const shouldDrop = !skipDrops && !enemy.selfDestructed;
+    if (shouldDrop && Math.random() < 0.08 + this.run.player.stats.F * 0.01) {
       if (Math.random() < 0.5) {
         this.spawnWandDrop(enemy.x, enemy.y, createRandomWand(this.run.floor + this.run.player.stats.F));
       } else {
         this.spawnMeleeDrop(enemy.x, enemy.y, createRandomMelee(this.run.floor + this.run.player.stats.F));
       }
     }
-    if (Math.random() < 0.12) {
+    if (shouldDrop && Math.random() < 0.12) {
       this.spawnArmorDrop(enemy.x + 10, enemy.y, createRandomArmor(this.run.floor + this.run.player.stats.F));
     }
-    if (Math.random() < 0.20) {
+    if (shouldDrop && Math.random() < 0.20) {
       this.spawnPotion(enemy.x, enemy.y);
     }
     if (this.run.player.armor.specialEffect === "Regen") {
