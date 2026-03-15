@@ -248,7 +248,7 @@ function createRandomWand(floor: number, starter = false): Wand {
   const hasMultishot = effects.includes("Multishot");
   const damage = (8 + floor * 0.7 + rarityIndex * 4) * (hasMultishot ? 0.4 : 1);
   const fireRate = Math.max(180, 520 - floor * 2 - rarityIndex * 45);
-  const wandType = hasMultishot ? ["ガトリング", "散弾杖", "拡散呪具"] : ["ワンド", "杖", "呪具"];
+  const wandType = hasMultishot ? ["連弾杖", "乱魔杖", "散華の杖"] : ["ワンド", "杖", "呪具"];
 
   return {
     name: `${attribute === "None" ? "魔力" : attribute}の${wandType[Phaser.Math.Between(0, 2)]}`,
