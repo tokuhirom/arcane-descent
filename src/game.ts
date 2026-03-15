@@ -168,7 +168,7 @@ const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   V: "最大HP+5, 被ダメ軽減, 撃破時回復UP",
   F: "良質な武器の出現率UP",
   A: "属性攻撃・継続ダメージ強化",
-  S: "移動・攻撃・弾速UP",
+  S: "移動速度・攻撃速度UP",
   T: "クリティカル率UP"
 };
 const BOSS_PROFILES: Record<number, BossProfile> = {
@@ -1652,7 +1652,7 @@ class DungeonScene extends Phaser.Scene {
       if (projectile.body) {
         this.physics.velocityFromRotation(
           baseAngle + spread,
-          weapon.stats.projectileSpeed + this.run.player.stats.S * 8,
+          weapon.stats.projectileSpeed,
           (projectile.body as Phaser.Physics.Arcade.Body).velocity
         );
       }
