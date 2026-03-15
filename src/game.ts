@@ -41,6 +41,7 @@ interface PlayerState {
   thunderMs: number;
   poisonMs: number;
   defenseBreak: number;
+  hitInvulnMs: number;
 }
 
 interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
@@ -154,7 +155,8 @@ function createStarterState(): RunState {
       iceMs: 0,
       thunderMs: 0,
       poisonMs: 0,
-      defenseBreak: 0
+      defenseBreak: 0,
+      hitInvulnMs: 0
     }
   };
 }
@@ -974,7 +976,7 @@ class DungeonScene extends Phaser.Scene {
     if (!projectile.active) {
       return;
     }
-    this.damagePlayer(projectile.damage, projectile.attribute);
+    this.damagePlayer(projectile.damage, projectile.attribute, false);
     projectile.destroy();
   }
 
@@ -984,14 +986,26 @@ class DungeonScene extends Phaser.Scene {
       return;
     }
     enemy.touchCooldown = 700;
-    this.damagePlayer(6 + this.run.floor * 0.25 + enemy.bossTier * 2, enemy.attribute);
-    this.knockbackVelocity = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize().scale(220);
+    this.damagePlayer(6 + this.run.floor * 0.25 + enemy.bossTier * 2, enemy.attribute, false);
+    const knockback = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y);
+    if (knockback.lengthSq() < 1) {
+      knockback.set(
+        Phaser.Math.Between(-100, 100) / 100,
+        Phaser.Math.Between(-100, 100) / 100
+      );
+    }
+    this.knockbackVelocity = knockback.normalize().scale(220);
   }
 
-  private damagePlayer(amount: number, attribute: Attribute): void {
+  private damagePlayer(amount: number, attribute: Attribute, bypassInvuln: boolean): void {
+    if (!bypassInvuln && this.run.player.hitInvulnMs > 0) {
+      return;
+    }
+
     const vitalityReduction = 1 - this.run.player.stats.V * 0.01;
     const poisonPenalty = 1 + this.run.player.defenseBreak;
     this.run.player.hp -= amount * vitalityReduction * poisonPenalty;
+    this.run.player.hitInvulnMs = bypassInvuln ? this.run.player.hitInvulnMs : 450;
     if (attribute === "Fire") {
       this.run.player.burnMs = Math.max(this.run.player.burnMs, 2500);
     } else if (attribute === "Ice") {
@@ -1025,8 +1039,9 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private updatePlayerStatus(delta: number): void {
+    this.run.player.hitInvulnMs = Math.max(0, this.run.player.hitInvulnMs - delta);
     if (this.run.player.thunderMs > 0) {
-      this.run.player.thunderMs -= delta;
+      this.run.player.thunderMs = Math.max(0, this.run.player.thunderMs - delta);
     }
 
     this.passiveTickMs += delta;
@@ -1041,10 +1056,10 @@ class DungeonScene extends Phaser.Scene {
     if (this.passiveTickMs >= 500) {
       this.passiveTickMs = 0;
       if (this.run.player.burnMs > 0) {
-        this.run.player.hp -= 2.5;
+        this.damagePlayer(2.5, "Fire", true);
       }
       if (this.run.player.poisonMs > 0) {
-        this.run.player.hp -= 1.2;
+        this.damagePlayer(1.2, "Poison", true);
       }
       const regen = 0.18 + this.run.player.stats.V * 0.03;
       if (this.run.player.burnMs <= 0) {
@@ -1132,6 +1147,7 @@ class DungeonScene extends Phaser.Scene {
     if (this.run.player.iceMs > 0) statuses.push("Slow");
     if (this.run.player.thunderMs > 0) statuses.push("Stun");
     if (this.run.player.poisonMs > 0) statuses.push("Poison");
+    if (this.run.player.hitInvulnMs > 0) statuses.push("Guard");
     if (this.layout.bossRoomId !== undefined) {
       const boss = (this.enemies.getChildren() as EnemySprite[]).find((enemy) => enemy.active && enemy.roomId === this.layout.bossRoomId);
       if (boss) {
