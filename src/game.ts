@@ -261,9 +261,17 @@ class BootScene extends Phaser.Scene {
     g.generateTexture("chest", 18, 18);
     g.clear();
 
+    g.fillStyle(0x1a1428, 1);
+    g.fillRect(0, 0, 22, 22);
     g.fillStyle(0x9d4edd, 1);
-    g.fillRect(0, 0, 20, 20);
-    g.generateTexture("stairs", 20, 20);
+    g.fillRect(2, 2, 18, 4);
+    g.fillStyle(0x7b2fbf, 1);
+    g.fillRect(4, 8, 14, 4);
+    g.fillStyle(0x5a1f99, 1);
+    g.fillRect(6, 14, 10, 4);
+    g.fillStyle(0x3d1070, 1);
+    g.fillRect(8, 19, 6, 3);
+    g.generateTexture("stairs", 22, 22);
     g.clear();
 
     g.fillStyle(0xf4d35e, 1);
@@ -414,7 +422,7 @@ class WandCompareScene extends Phaser.Scene {
       makeText(this, x, y, label, 16, color);
       makeText(this, x, y + 22, `${wand.name}`, 18, "#f8f1ff");
       makeText(this, x, y + 46, `${wand.rarity}  ${wand.attribute}`, 14, "#cdb4db");
-      makeText(this, x, y + 66, `ATK ${wand.stats.damage.toFixed(1)}  SPD ${wand.stats.fireRate}  PRC ${wand.stats.piercing}`, 14, "#9ad1ff");
+      makeText(this, x, y + 66, `攻撃 ${wand.stats.damage.toFixed(1)}  速度 ${wand.stats.fireRate}  貫通 ${wand.stats.piercing}`, 14, "#9ad1ff");
       const fx = wand.specialEffects.length > 0 ? wand.specialEffects.join(", ") : "-";
       makeText(this, x, y + 86, fx, 13, "#80ed99");
     };
