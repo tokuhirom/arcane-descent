@@ -436,6 +436,7 @@ class DungeonScene extends Phaser.Scene {
   private roomTitleTimer = 0;
   private passiveTickMs = 0;
   private bossPhase = 1;
+  private enemyUpdateFrame = 0;
   private bossDoorLocked = false;
   private readonly usingTouchControls =
     typeof window !== "undefined" &&
@@ -818,11 +819,10 @@ class DungeonScene extends Phaser.Scene {
       movement.copy(this.joystickVector);
     }
 
+    let speedMultiplier = this.run.player.iceMs > 0 ? 0.58 : 1;
     if (this.run.player.thunderMs > 0) {
-      movement.set(0, 0);
+      speedMultiplier *= 0.82;
     }
-
-    const speedMultiplier = this.run.player.iceMs > 0 ? 0.58 : 1;
     if (movement.lengthSq() > 0) {
       movement.normalize().scale((BASE_SPEED + this.run.player.stats.S * 6) * speedMultiplier);
     }
@@ -968,6 +968,7 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private updateEnemies(delta: number): void {
+    this.enemyUpdateFrame = (this.enemyUpdateFrame + 1) % 6;
     this.enemies.children.iterate((child) => {
       const enemy = child as EnemySprite | null;
       if (!enemy || !enemy.active) {
@@ -979,6 +980,11 @@ class DungeonScene extends Phaser.Scene {
 
       if (!enemy.activeRoom) {
         enemy.setVelocity(0, 0);
+        return true;
+      }
+
+      const onScreen = this.cameras.main.worldView.contains(enemy.x, enemy.y);
+      if (!onScreen && this.enemyUpdateFrame % 3 !== 0) {
         return true;
       }
 
@@ -1060,7 +1066,9 @@ class DungeonScene extends Phaser.Scene {
     projectile.owner = "enemy";
     projectile.damage = 5 + this.run.floor * 0.4 + enemy.bossTier * 2;
     projectile.piercing = 1;
-    projectile.attribute = enemy.attribute;
+    projectile.attribute = this.run.floor === 100 && enemy.roomId === this.layout.bossRoomId
+      ? ATTRIBUTES[(this.bossPhase + Math.floor(this.time.now / 200)) % ATTRIBUTES.length]
+      : enemy.attribute;
     projectile.specialEffects = [];
     projectile.chainHits = 0;
     projectile.lifetimeMs = 1400;
@@ -1308,7 +1316,7 @@ class DungeonScene extends Phaser.Scene {
     } else if (attribute === "Ice") {
       this.run.player.iceMs = Math.max(this.run.player.iceMs, 2000);
     } else if (attribute === "Thunder") {
-      this.run.player.thunderMs = Math.max(this.run.player.thunderMs, 240);
+      this.run.player.thunderMs = Math.max(this.run.player.thunderMs, 180);
     } else if (attribute === "Poison") {
       this.run.player.poisonMs = Math.max(this.run.player.poisonMs, 3200);
       this.run.player.defenseBreak = Math.min(0.35, this.run.player.defenseBreak + 0.07);
@@ -1432,15 +1440,17 @@ class DungeonScene extends Phaser.Scene {
     const x0 = GAME_WIDTH - 126;
     const y0 = 44;
     const cell = 5;
+    const precisionStep = this.run.player.stats.I >= 12 ? 1 : this.run.player.stats.I >= 8 ? 2 : 3;
     this.minimapGraphics.clear();
     this.minimapGraphics.fillStyle(0x0e1320, 0.85);
     this.minimapGraphics.fillRect(x0 - 8, y0 - 8, 118, 140);
 
-    for (let y = 0; y < this.layout.height; y += 1) {
-      for (let x = 0; x < this.layout.width; x += 1) {
+    for (let y = 0; y < this.layout.height; y += precisionStep) {
+      for (let x = 0; x < this.layout.width; x += precisionStep) {
         if (this.fog[y][x] === 0 || this.layout.tiles[y][x] !== TileType.Floor) continue;
         this.minimapGraphics.fillStyle(this.fog[y][x] === 2 ? 0xcdb4db : 0x6d597a, 1);
-        this.minimapGraphics.fillRect(x0 + x * cell / 2.5, y0 + y * cell / 2.5, 2, 2);
+        const dotSize = precisionStep === 1 ? 2 : 2.5;
+        this.minimapGraphics.fillRect(x0 + x * cell / 2.5, y0 + y * cell / 2.5, dotSize, dotSize);
       }
     }
   }

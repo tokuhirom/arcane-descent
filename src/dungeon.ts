@@ -313,11 +313,13 @@ export function generateDungeon(floor: number): DungeonLayout {
     }
 
     const area = room.width * room.height;
-    const count = Math.max(1, Math.floor(area / 20) + randomBetween(-1, 1));
+    const baseCount = Math.max(1, Math.floor(area / 20) + randomBetween(-1, 1));
+    const count = room.kind === "stairs" ? Math.max(1, baseCount - 1) : baseCount;
     for (let i = 0; i < count; i += 1) {
+      const margin = room.kind === "stairs" ? 2 : 1;
       spawns.push({
-        x: randomBetween(room.x + 1, room.x + room.width - 2) + 0.5,
-        y: randomBetween(room.y + 1, room.y + room.height - 2) + 0.5,
+        x: randomBetween(room.x + margin, room.x + room.width - 1 - margin) + 0.5,
+        y: randomBetween(room.y + margin, room.y + room.height - 1 - margin) + 0.5,
         roomId: room.id,
         kind: pickEnemyKind(floor),
         elite: floor >= 81 && Math.random() < 0.3
