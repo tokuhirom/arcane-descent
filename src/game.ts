@@ -462,11 +462,18 @@ class GameOverScene extends Phaser.Scene {
     super("GameOverScene");
   }
 
-  create(): void {
+  create(data?: { floor?: number; level?: number; cause?: string }): void {
     const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.92)
       .setInteractive();
-    makeText(this, bg.x - 120, bg.y - 30, "Game Over", 42, "#ff6b6b");
-    makeText(this, bg.x - 180, bg.y + 24, "Tap / Press R to restart", 22, "#f8f1ff");
+    const cy = GAME_HEIGHT / 2;
+    makeText(this, GAME_WIDTH / 2 - 120, cy - 80, "Game Over", 42, "#ff6b6b");
+    if (data?.cause) {
+      makeText(this, GAME_WIDTH / 2 - 180, cy - 25, `死因: ${data.cause}`, 20, "#cdb4db");
+    }
+    if (data?.floor) {
+      makeText(this, GAME_WIDTH / 2 - 180, cy + 10, `到達: F${data.floor}  LV ${data.level ?? 1}`, 20, "#fff2b2");
+    }
+    makeText(this, GAME_WIDTH / 2 - 180, cy + 50, "Tap / Press R to restart", 22, "#f8f1ff");
     const restart = () => {
       this.scene.stop();
       this.scene.stop("DungeonScene");
@@ -529,6 +536,7 @@ class DungeonScene extends Phaser.Scene {
   private joystickVector = new Phaser.Math.Vector2();
   private joystickPointer?: Phaser.Input.Pointer;
   private knockbackVelocity = new Phaser.Math.Vector2();
+  private isDying = false;
   private currentRoomId?: number;
   private roomTitleText?: Phaser.GameObjects.Text;
   private roomTitleTimer = 0;
@@ -590,7 +598,7 @@ class DungeonScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setBounds(0, 0, this.layout.width * TILE_SIZE, this.layout.height * TILE_SIZE);
-    this.cameras.main.setZoom(1.1);
+    this.cameras.main.setZoom(1.0);
     this.physics.world.setBounds(0, 0, this.layout.width * TILE_SIZE, this.layout.height * TILE_SIZE);
 
     const safeCallback = (fn: (...args: Phaser.GameObjects.GameObject[]) => void): Phaser.Types.Physics.Arcade.ArcadePhysicsCallback => {
@@ -838,6 +846,9 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private doUpdate(delta: number): void {
+    if (this.isDying) {
+      return;
+    }
     const room = this.findCurrentRoom();
     if (room?.id !== this.currentRoomId) {
       this.currentRoomId = room?.id;
@@ -1395,7 +1406,7 @@ class DungeonScene extends Phaser.Scene {
     if (!projectile.active) {
       return;
     }
-    this.damagePlayer(projectile.damage, projectile.attribute, false);
+    this.damagePlayer(projectile.damage, projectile.attribute, false, `${projectile.attribute}の弾`);
     projectile.destroy();
   }
 
@@ -1405,7 +1416,10 @@ class DungeonScene extends Phaser.Scene {
       return;
     }
     enemy.touchCooldown = 700;
-    this.damagePlayer(6 + this.run.floor * 0.25 + enemy.bossTier * 2, enemy.attribute, false);
+    const killerName = enemy.bossTier > 0
+      ? (BOSS_PROFILES[this.run.floor]?.name ?? `${enemy.attribute}のボス`)
+      : `${enemy.attribute}の${enemy.kind}`;
+    this.damagePlayer(6 + this.run.floor * 0.25 + enemy.bossTier * 2, enemy.attribute, false, killerName);
     const knockback = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y);
     if (knockback.lengthSq() < 1) {
       knockback.set(
@@ -1416,15 +1430,57 @@ class DungeonScene extends Phaser.Scene {
     this.knockbackVelocity = knockback.normalize().scale(220);
   }
 
-  private damagePlayer(amount: number, attribute: Attribute, bypassInvuln: boolean): void {
+  private damagePlayer(amount: number, attribute: Attribute, bypassInvuln: boolean, cause = "不明"): void {
     const { died, damageDealt } = applyDamage(this.run.player, amount, attribute, bypassInvuln);
     if (damageDealt > 0) {
+      this.player.setVisible(true);
       console.log(`HIT: ${damageDealt.toFixed(1)} ${attribute} hp=${this.run.player.hp.toFixed(1)} died=${died}`);
     }
     if (died) {
-      this.scene.launch("GameOverScene");
-      this.scene.pause();
+      this.startDeathSequence(cause);
     }
+  }
+
+  private startDeathSequence(cause: string): void {
+    if (this.isDying) return;
+    this.isDying = true;
+    this.player.setVisible(false);
+    this.physics.pause();
+
+    const graveX = this.player.x;
+    const graveY = this.player.y;
+    const g = this.add.graphics();
+    g.fillStyle(0x888888, 1);
+    g.fillRoundedRect(graveX - 10, graveY - 16, 20, 20, 3);
+    g.fillRect(graveX - 6, graveY - 22, 12, 6);
+    g.setDepth(5);
+
+    const deathText = this.add.text(graveX, graveY - 40, "†", {
+      fontFamily: "Trebuchet MS, sans-serif",
+      fontSize: "28px",
+      color: "#ff6b6b"
+    }).setOrigin(0.5).setDepth(5);
+
+    this.time.delayedCall(800, () => {
+      const causeText = this.add.text(graveX, graveY + 16, cause, {
+        fontFamily: "Trebuchet MS, sans-serif",
+        fontSize: "14px",
+        color: "#cdb4db"
+      }).setOrigin(0.5).setDepth(5);
+
+      this.tweens.add({ targets: causeText, alpha: { from: 0, to: 1 }, duration: 400 });
+    });
+
+    this.time.delayedCall(3000, () => {
+      g.destroy();
+      deathText.destroy();
+      this.scene.launch("GameOverScene", {
+        floor: this.run.floor,
+        level: this.run.player.level,
+        cause
+      });
+      this.scene.pause();
+    });
   }
 
   private onLootChest(_: Phaser.GameObjects.GameObject, chestObj: Phaser.GameObjects.GameObject): void {
@@ -1486,10 +1542,10 @@ class DungeonScene extends Phaser.Scene {
     this.passiveTickMs += delta;
     if (this.passiveTickMs >= 500) {
       this.passiveTickMs = 0;
-      const { died } = applyPassiveTick(this.run.player);
+      const { died, burnDamage, poisonDamage } = applyPassiveTick(this.run.player);
       if (died) {
-        this.scene.launch("GameOverScene");
-        this.scene.pause();
+        const cause = burnDamage > 0 ? "炎上ダメージ" : poisonDamage > 0 ? "毒ダメージ" : "持続ダメージ";
+        this.startDeathSequence(cause);
       }
     }
   }
