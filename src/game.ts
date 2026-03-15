@@ -109,6 +109,15 @@ const STAT_LABELS: Record<StatKey, string> = {
   S: "Swiftness",
   T: "Fate"
 };
+const STAT_DESCRIPTIONS: Record<StatKey, string> = {
+  P: "攻撃力UP",
+  I: "視界・ミニマップ精度UP",
+  V: "最大HP+5, 被ダメ軽減, 回復UP",
+  F: "ワンド品質UP",
+  A: "属性効果・DoT強化",
+  S: "移動速度・攻撃速度UP",
+  T: "クリティカル率UP"
+};
 const BOSS_PROFILES: Record<number, BossProfile> = {
   10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 3.1, speedMultiplier: 1.25, fireCooldown: 1200 },
   20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 3.6, speedMultiplier: 0.85, fireCooldown: 1000 },
@@ -336,19 +345,20 @@ class LevelUpScene extends Phaser.Scene {
   create(data: { stats: Record<StatKey, number>; onPick: (key: StatKey) => void; onClose: () => void }): void {
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.72)
       .setInteractive();
-    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 470, 560, 0x0f1020, 0.94)
+    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 470, 620, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
     makeText(this, bg.x - 190, bg.y - 230, "Level Up", 34, "#f8f1ff");
     makeText(this, bg.x - 190, bg.y - 190, "1つ選んで強化", 18, "#cdb4db");
 
     STAT_KEYS.forEach((key, index) => {
       const x = bg.x - 170;
-      const y = bg.y - 140 + index * 58;
-      const button = this.add.rectangle(x + 160, y + 20, 320, 44, 0x241734, 1)
+      const y = bg.y - 140 + index * 66;
+      const button = this.add.rectangle(x + 160, y + 26, 320, 56, 0x241734, 1)
         .setInteractive({ useHandCursor: true })
         .setStrokeStyle(1, 0xf4d35e);
-      makeText(this, x + 16, y + 6, `${key}  ${STAT_LABELS[key]}`, 20, "#fff2b2");
-      makeText(this, x + 16, y + 28, `現在値 ${data.stats[key]} / 20`, 15, "#f8f1ff");
+      makeText(this, x + 16, y + 4, `${key}  ${STAT_LABELS[key]}`, 20, "#fff2b2");
+      makeText(this, x + 16, y + 24, `${STAT_DESCRIPTIONS[key]}`, 13, "#cdb4db");
+      makeText(this, x + 16, y + 40, `現在値 ${data.stats[key]} / 20`, 13, "#f8f1ff");
       button.on("pointerdown", () => {
         data.onPick(key);
         data.onClose();
@@ -524,14 +534,14 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private createJoystick(): void {
-    this.joystickBase = this.add.circle(92, GAME_HEIGHT - 110, 44, 0x3a254f, 0.4).setScrollFactor(0);
-    this.joystickThumb = this.add.circle(92, GAME_HEIGHT - 110, 18, 0xcdb4db, 0.6).setScrollFactor(0);
+    this.joystickBase = this.add.circle(GAME_WIDTH - 92, GAME_HEIGHT - 110, 44, 0x3a254f, 0.4).setScrollFactor(0);
+    this.joystickThumb = this.add.circle(GAME_WIDTH - 92, GAME_HEIGHT - 110, 18, 0xcdb4db, 0.6).setScrollFactor(0);
     if (!this.usingTouchControls) {
       this.joystickBase.setVisible(false);
       this.joystickThumb.setVisible(false);
       return;
     }
-    const center = new Phaser.Math.Vector2(92, GAME_HEIGHT - 110);
+    const center = new Phaser.Math.Vector2(GAME_WIDTH - 92, GAME_HEIGHT - 110);
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.joystickPointer) {
@@ -560,7 +570,7 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private updateJoystick(pointer: Phaser.Input.Pointer): void {
-    const center = new Phaser.Math.Vector2(92, GAME_HEIGHT - 110);
+    const center = new Phaser.Math.Vector2(GAME_WIDTH - 92, GAME_HEIGHT - 110);
     const offset = new Phaser.Math.Vector2(pointer.x - center.x, pointer.y - center.y);
     if (offset.length() > 36) {
       offset.setLength(36);
@@ -878,6 +888,12 @@ class DungeonScene extends Phaser.Scene {
     }
   }
 
+  private isProjectileInWall(projectile: Phaser.Physics.Arcade.Image): boolean {
+    const tx = Math.floor(projectile.x / TILE_SIZE);
+    const ty = Math.floor(projectile.y / TILE_SIZE);
+    return !this.isWalkable(tx, ty);
+  }
+
   private collidesAt(
     actor: Phaser.Physics.Arcade.Sprite | Phaser.Physics.Arcade.Image,
     x: number,
@@ -1038,7 +1054,7 @@ class DungeonScene extends Phaser.Scene {
         this.applyProjectileHoming(projectile, 0.08);
       }
       projectile.lifetimeMs -= delta;
-      if (projectile.lifetimeMs <= 0) {
+      if (projectile.lifetimeMs <= 0 || this.isProjectileInWall(projectile)) {
         projectile.destroy();
       }
       return true;
@@ -1048,7 +1064,7 @@ class DungeonScene extends Phaser.Scene {
       const projectile = child as ProjectileSprite | null;
       if (!projectile || !projectile.active) return true;
       projectile.lifetimeMs -= delta;
-      if (projectile.lifetimeMs <= 0) {
+      if (projectile.lifetimeMs <= 0 || this.isProjectileInWall(projectile)) {
         projectile.destroy();
       }
       return true;
