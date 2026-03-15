@@ -168,10 +168,65 @@ function pickLeafRoom(roomIds: number[], rooms: Room[], exclude: Set<number>): n
   return leaf ?? roomIds.find((id) => !exclude.has(id));
 }
 
+function createBossFloor(tiles: TileTypeValue[][], floor: number): DungeonLayout {
+  const rooms: Room[] = [
+    { id: 0, x: 4, y: 14, width: 10, height: 8, kind: "start", neighbors: [1] },
+    { id: 1, x: 18, y: 13, width: 9, height: 10, kind: "normal", neighbors: [0, 2, 3] },
+    { id: 2, x: 31, y: 6, width: 9, height: 8, kind: "treasure", neighbors: [1] },
+    { id: 3, x: 31, y: 20, width: 19, height: 14, kind: "boss", neighbors: [1] }
+  ];
+
+  rooms.forEach((room) => carveRoom(tiles, room));
+  carveCorridor(tiles, centerOf(rooms[0]), centerOf(rooms[1]));
+  carveCorridor(tiles, centerOf(rooms[1]), centerOf(rooms[2]));
+  carveCorridor(tiles, centerOf(rooms[1]), centerOf(rooms[3]));
+  finalizeWalls(tiles);
+
+  const bossCenter = centerOf(rooms[3]);
+  return {
+    floor,
+    width: GRID_WIDTH,
+    height: GRID_HEIGHT,
+    tiles,
+    rooms,
+    start: centerOf(rooms[0]),
+    stairs: bossCenter,
+    treasureRooms: [2],
+    spawns: [
+      {
+        x: bossCenter.x,
+        y: bossCenter.y,
+        roomId: 3,
+        kind: floor === 100 ? "summoner" : pickEnemyKind(floor),
+        elite: true
+      },
+      {
+        x: 22.5,
+        y: 17.5,
+        roomId: 1,
+        kind: pickEnemyKind(Math.max(1, floor - 5)),
+        elite: floor >= 81 && Math.random() < 0.3
+      },
+      {
+        x: 24.5,
+        y: 19.5,
+        roomId: 1,
+        kind: pickEnemyKind(floor),
+        elite: floor >= 81 && Math.random() < 0.3
+      }
+    ],
+    bossRoomId: 3
+  };
+}
+
 export function generateDungeon(floor: number): DungeonLayout {
   const tiles = Array.from({ length: GRID_HEIGHT }, () =>
     Array.from({ length: GRID_WIDTH }, () => TileType.Wall)
   );
+
+  if (floor % 10 === 0) {
+    return createBossFloor(tiles, floor);
+  }
 
   const roomCount = Phaser.Math.Clamp(5 + Math.floor(floor / 12), 5, 10);
   const rooms: Room[] = [];
