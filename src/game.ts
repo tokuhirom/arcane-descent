@@ -337,6 +337,46 @@ class BossIntroScene extends Phaser.Scene {
   }
 }
 
+class StairsConfirmScene extends Phaser.Scene {
+  constructor() {
+    super("StairsConfirmScene");
+  }
+
+  create(data: { floor: number; onDescend: () => void; onCancel: () => void }): void {
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6)
+      .setInteractive();
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 380, 160, 0x0f1020, 0.94)
+      .setStrokeStyle(2, 0xf4d35e);
+
+    makeText(this, panel.x - 150, panel.y - 50, `F${data.floor} → F${data.floor + 1}`, 24, "#fff2b2");
+    makeText(this, panel.x - 150, panel.y - 15, "次の階に進みますか？", 18, "#f8f1ff");
+
+    const yesBtn = this.add.rectangle(panel.x - 60, panel.y + 40, 110, 36, 0x3a254f, 1)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(1, 0xf4d35e);
+    makeText(this, panel.x - 90, panel.y + 30, "進む", 20, "#f4d35e");
+
+    const noBtn = this.add.rectangle(panel.x + 60, panel.y + 40, 110, 36, 0x241734, 1)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(1, 0x9d4edd);
+    makeText(this, panel.x + 30, panel.y + 30, "戻る", 20, "#cdb4db");
+
+    const descend = () => {
+      this.scene.stop();
+      data.onDescend();
+    };
+    const cancel = () => {
+      this.scene.stop();
+      data.onCancel();
+    };
+
+    yesBtn.on("pointerdown", descend);
+    noBtn.on("pointerdown", cancel);
+    this.input.keyboard?.once("keydown-SPACE", descend);
+    this.input.keyboard?.once("keydown-ESC", cancel);
+  }
+}
+
 class LevelUpScene extends Phaser.Scene {
   constructor() {
     super("LevelUpScene");
@@ -374,14 +414,17 @@ class GameOverScene extends Phaser.Scene {
   }
 
   create(): void {
-    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.92);
+    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.92)
+      .setInteractive();
     makeText(this, bg.x - 120, bg.y - 30, "Game Over", 42, "#ff6b6b");
-    makeText(this, bg.x - 180, bg.y + 24, "Press R to restart", 22, "#f8f1ff");
-    this.input.keyboard?.once("keydown-R", () => {
+    makeText(this, bg.x - 180, bg.y + 24, "Tap / Press R to restart", 22, "#f8f1ff");
+    const restart = () => {
       this.scene.stop();
       this.scene.stop("DungeonScene");
       this.scene.start("TitleScene");
-    });
+    };
+    this.input.keyboard?.once("keydown-R", restart);
+    bg.once("pointerdown", restart);
   }
 }
 
@@ -395,12 +438,15 @@ class EndingScene extends Phaser.Scene {
     makeText(this, 48, 220, "Arcane Descent", 42, "#f4d35e");
     makeText(this, 48, 310, "深淵の王は倒れ、迷宮は静寂を取り戻した。", 24, "#f8f1ff");
     makeText(this, 48, 360, "だが魔力の残響はまだ地下に満ちている。", 24, "#cdb4db");
-    makeText(this, 48, 450, "Press R to descend again", 22, "#f8f1ff");
-    this.input.keyboard?.once("keydown-R", () => {
+    makeText(this, 48, 450, "Tap / Press R to descend again", 22, "#f8f1ff");
+    const restart = () => {
       this.scene.stop();
       this.scene.stop("DungeonScene");
       this.scene.start("TitleScene");
-    });
+    };
+    this.input.keyboard?.once("keydown-R", restart);
+    bg.setInteractive();
+    bg.once("pointerdown", restart);
   }
 }
 
@@ -481,6 +527,7 @@ class DungeonScene extends Phaser.Scene {
     this.player.setCircle(10);
     this.player.setDepth(3);
 
+    this.run.player.hitInvulnMs = 1500;
     this.spawnEncounters();
     this.stairs = this.physics.add.staticImage(
       this.layout.stairs.x * TILE_SIZE,
@@ -799,18 +846,13 @@ class DungeonScene extends Phaser.Scene {
     if (!room) {
       return;
     }
-    const labels: Record<Room["kind"], string> = {
-      start: "Start Room",
-      normal: "Normal Room",
-      treasure: "Treasure Room",
-      stairs: "Stairs Room",
-      boss: `Boss Room: ${bossName(this.run.floor)}`
-    };
-    this.roomTitleText?.destroy();
-    this.roomTitleText = makeText(this, GAME_WIDTH / 2 - 160, 100, labels[room.kind], 22, "#fff2b2")
-      .setScrollFactor(0)
-      .setDepth(10);
-    this.roomTitleTimer = 1800;
+    if (room.kind === "boss") {
+      this.roomTitleText?.destroy();
+      this.roomTitleText = makeText(this, GAME_WIDTH / 2 - 160, 100, `Boss: ${bossName(this.run.floor)}`, 22, "#fff2b2")
+        .setScrollFactor(0)
+        .setDepth(10);
+      this.roomTitleTimer = 1800;
+    }
   }
 
   private handlePlayerMovement(delta: number): void {
@@ -1338,8 +1380,20 @@ class DungeonScene extends Phaser.Scene {
       this.showMessage("ボスを倒すまで階段は開かない");
       return;
     }
-    this.run.floor += 1;
-    this.scene.restart(this.run);
+    if (this.scene.isActive("StairsConfirmScene")) {
+      return;
+    }
+    this.scene.pause();
+    this.scene.launch("StairsConfirmScene", {
+      floor: this.run.floor,
+      onDescend: () => {
+        this.run.floor += 1;
+        this.scene.restart(this.run);
+      },
+      onCancel: () => {
+        this.scene.resume();
+      }
+    });
   }
 
   private updatePlayerStatus(delta: number): void {
@@ -1427,7 +1481,40 @@ class DungeonScene extends Phaser.Scene {
       }
     }
 
+    this.updateObjectVisibility();
     this.drawMinimap();
+  }
+
+  private updateObjectVisibility(): void {
+    const fogAt = (x: number, y: number): FogState => {
+      const tx = Math.floor(x / TILE_SIZE);
+      const ty = Math.floor(y / TILE_SIZE);
+      return this.fog[ty]?.[tx] ?? 0;
+    };
+
+    this.chests.children.iterate((child) => {
+      if (child) {
+        const img = child as Phaser.Physics.Arcade.Image;
+        img.setVisible(fogAt(img.x, img.y) > 0);
+      }
+      return true;
+    });
+
+    this.lootDrops.children.iterate((child) => {
+      if (child) {
+        const img = child as Phaser.Physics.Arcade.Image;
+        img.setVisible(fogAt(img.x, img.y) > 0);
+      }
+      return true;
+    });
+
+    this.enemies.children.iterate((child) => {
+      if (child) {
+        const enemy = child as EnemySprite;
+        enemy.setVisible(fogAt(enemy.x, enemy.y) === 2);
+      }
+      return true;
+    });
   }
 
   private drawMinimap(): void {
@@ -1562,7 +1649,7 @@ export function createGame(container: string): Phaser.Game {
         debug: false
       }
     },
-    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, GameOverScene, EndingScene],
+    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, GameOverScene, EndingScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
