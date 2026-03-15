@@ -743,6 +743,7 @@ class DungeonScene extends Phaser.Scene {
     this.handleAutoFire(delta);
     this.updateEnemies(delta);
     this.updateFog();
+    this.updatePlayerVisuals();
     this.syncUi();
     this.updateTransientUi(delta);
   }
@@ -1388,6 +1389,32 @@ class DungeonScene extends Phaser.Scene {
     }
   }
 
+  private updatePlayerVisuals(): void {
+    if (this.run.player.thunderMs > 0) {
+      this.player.setTint(0xffd166);
+      this.player.setScale(1.08);
+      return;
+    }
+    if (this.run.player.burnMs > 0) {
+      this.player.setTint(0xff6b35);
+      this.player.setScale(1.05);
+      return;
+    }
+    if (this.run.player.poisonMs > 0) {
+      this.player.setTint(0x80ed99);
+      this.player.setScale(1.04);
+      return;
+    }
+    if (this.run.player.iceMs > 0) {
+      this.player.setTint(0x7bdff2);
+      this.player.setScale(1.04);
+      return;
+    }
+
+    this.player.clearTint();
+    this.player.setScale(1);
+  }
+
   private tickEnemyStatus(enemy: EnemySprite, delta: number): void {
     enemy.burnMs = Math.max(0, enemy.burnMs - delta);
     enemy.slowMs = Math.max(0, enemy.slowMs - delta);
@@ -1473,6 +1500,13 @@ class DungeonScene extends Phaser.Scene {
       }
     }
     this.statusText.setText(statuses.join("  ") || "Status: Normal");
+    this.statusText.setColor(
+      this.run.player.thunderMs > 0 ? "#ffd166" :
+      this.run.player.burnMs > 0 ? "#ff8c69" :
+      this.run.player.poisonMs > 0 ? "#80ed99" :
+      this.run.player.iceMs > 0 ? "#7bdff2" :
+      "#9ad1ff"
+    );
   }
 
   private isWalkable(x: number, y: number): boolean {
