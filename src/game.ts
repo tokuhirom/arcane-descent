@@ -278,7 +278,9 @@ class LevelUpScene extends Phaser.Scene {
     super("LevelUpScene");
   }
 
-  create(data: { stats: Record<StatKey, number>; onPick: (key: StatKey) => void }): void {
+  create(data: { stats: Record<StatKey, number>; onPick: (key: StatKey) => void; onClose: () => void }): void {
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.72)
+      .setInteractive();
     const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 470, 560, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
     makeText(this, bg.x - 190, bg.y - 230, "Level Up", 34, "#f8f1ff");
@@ -294,6 +296,7 @@ class LevelUpScene extends Phaser.Scene {
       makeText(this, x + 16, y + 28, `現在値 ${data.stats[key]} / 20`, 15, "#f8f1ff");
       button.on("pointerdown", () => {
         data.onPick(key);
+        data.onClose();
         this.scene.stop();
       });
     });
@@ -957,6 +960,7 @@ class DungeonScene extends Phaser.Scene {
     }
 
     if (this.run.player.statPoints > 0 && !this.scene.isActive("LevelUpScene")) {
+      this.scene.pause();
       this.scene.launch("LevelUpScene", {
         stats: this.run.player.stats,
         onPick: (key: StatKey) => {
@@ -966,6 +970,9 @@ class DungeonScene extends Phaser.Scene {
             this.run.player.maxHp += 5;
             this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + 5);
           }
+        },
+        onClose: () => {
+          this.scene.resume();
         }
       });
     }
