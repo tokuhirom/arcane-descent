@@ -143,16 +143,16 @@ const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   T: "クリティカル率UP"
 };
 const BOSS_PROFILES: Record<number, BossProfile> = {
-  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 20, speedMultiplier: 1.25, fireCooldown: 1200 },
-  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 60, speedMultiplier: 0.85, fireCooldown: 1000 },
-  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 60, speedMultiplier: 1.6, fireCooldown: 700 },
-  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 100, speedMultiplier: 1.05, fireCooldown: 1100 },
-  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 130, speedMultiplier: 1.1, fireCooldown: 820 },
-  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 170, speedMultiplier: 1.2, fireCooldown: 900 },
-  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 200, speedMultiplier: 1.3, fireCooldown: 620 },
-  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 220, speedMultiplier: 0.4, fireCooldown: 950 },
-  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 210, speedMultiplier: 1.5, fireCooldown: 760 },
-  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 250, speedMultiplier: 1.25, fireCooldown: 650 }
+  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 20, speedMultiplier: 1.4, fireCooldown: 800 },
+  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 60, speedMultiplier: 0.9, fireCooldown: 700 },
+  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 60, speedMultiplier: 1.8, fireCooldown: 500 },
+  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 100, speedMultiplier: 1.1, fireCooldown: 750 },
+  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 130, speedMultiplier: 1.2, fireCooldown: 550 },
+  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 170, speedMultiplier: 1.3, fireCooldown: 650 },
+  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 200, speedMultiplier: 1.4, fireCooldown: 400 },
+  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 220, speedMultiplier: 0.4, fireCooldown: 600 },
+  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 210, speedMultiplier: 1.6, fireCooldown: 500 },
+  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 250, speedMultiplier: 1.4, fireCooldown: 400 }
 };
 
 const sfx = new SfxManager();
@@ -1528,7 +1528,8 @@ class DungeonScene extends Phaser.Scene {
             this.spawnEnemyProjectile(enemy, spread);
           }
           const baseCd = enemy.bossTier > 0 ? BOSS_PROFILES[this.run.floor].fireCooldown : Math.max(400, 900 - this.run.floor * 6);
-          enemy.fireCooldown = Math.max(260, (isF70Boss ? baseCd * 0.7 : baseCd) - this.bossPhase * 70);
+          const phaseCdReduction = enemy.bossTier > 0 ? this.bossPhase * 150 : 0;
+          enemy.fireCooldown = Math.max(200, (isF70Boss ? baseCd * 0.7 : baseCd) - phaseCdReduction);
         }
       } else if (enemy.kind === "rusher") {
         // Charge-up mechanic: brief pause before rushing
@@ -1599,7 +1600,7 @@ class DungeonScene extends Phaser.Scene {
   private spawnEnemyProjectile(enemy: EnemySprite, spread = 0): void {
     const projectile = this.enemyProjectiles.create(enemy.x, enemy.y, "projectile") as ProjectileSprite;
     projectile.owner = "enemy";
-    projectile.damage = 5 + this.run.floor * 0.4 + enemy.bossTier * 2;
+    projectile.damage = 5 + this.run.floor * 0.4 + enemy.bossTier * 5;
     projectile.piercing = 1;
     projectile.attribute = this.run.floor === 100 && enemy.roomId === this.layout.bossRoomId
       ? ATTRIBUTES[(this.bossPhase + Math.floor(this.time.now / 200)) % ATTRIBUTES.length]
@@ -1607,15 +1608,17 @@ class DungeonScene extends Phaser.Scene {
     projectile.specialEffects = [];
     projectile.chainHits = 0;
     projectile.lifetimeMs = 1400;
-    projectile.setScale(0.75);
-    projectile.setTint(attributeColor(enemy.attribute));
+    const isBoss = enemy.bossTier > 0;
+    projectile.setScale(isBoss ? 1.1 : 0.75);
+    projectile.setTint(attributeColor(projectile.attribute));
     if (!projectile.body) return;
+    const speed = 260 + this.run.floor * 2 + enemy.bossTier * 30;
     if (spread === 0) {
-      this.physics.moveToObject(projectile, this.player, 260 + this.run.floor * 2 + enemy.bossTier * 18);
+      this.physics.moveToObject(projectile, this.player, speed);
       return;
     }
     const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y) + spread;
-    this.physics.velocityFromRotation(angle, 260 + this.run.floor * 2 + enemy.bossTier * 18, (projectile.body as Phaser.Physics.Arcade.Body).velocity);
+    this.physics.velocityFromRotation(angle, speed, (projectile.body as Phaser.Physics.Arcade.Body).velocity);
   }
 
   private spawnMinion(enemy: EnemySprite): void {
@@ -1649,41 +1652,57 @@ class DungeonScene extends Phaser.Scene {
 
   private updateBossAbility(enemy: EnemySprite): void {
     const floor = this.run.floor;
+    const phase = this.bossPhase;
+    const cdScale = phase === 1 ? 1 : phase === 2 ? 0.65 : 0.4;
 
     if (floor === 10) {
-      // F10 "炎の魔獣" - fire trail
-      this.spawnGroundHazard(enemy.x, enemy.y, "Fire", 3000);
-      enemy.bossAbilityCd = 600;
+      // F10 "炎の魔獣" - fire trail (more in later phases)
+      for (let i = 0; i < phase; i++) {
+        this.spawnGroundHazard(
+          enemy.x + Phaser.Math.Between(-16, 16),
+          enemy.y + Phaser.Math.Between(-16, 16),
+          "Fire", 3500
+        );
+      }
+      enemy.bossAbilityCd = 500 * cdScale;
     } else if (floor === 20) {
-      // F20 "氷の巨人" - ice pillars near player
-      this.spawnIcePillar(
-        this.player.x + Phaser.Math.Between(-60, 60),
-        this.player.y + Phaser.Math.Between(-60, 60),
-        4000
-      );
-      enemy.bossAbilityCd = 2500;
+      // F20 "氷の巨人" - ice pillars near player (more pillars in phases)
+      for (let i = 0; i < phase + 1; i++) {
+        this.spawnIcePillar(
+          this.player.x + Phaser.Math.Between(-80, 80),
+          this.player.y + Phaser.Math.Between(-80, 80),
+          4000
+        );
+      }
+      enemy.bossAbilityCd = 2000 * cdScale;
     } else if (floor === 30) {
-      // F30 "雷の鳥" - omni-directional lightning
-      const directions = 12;
+      // F30 "雷の鳥" - omni-directional lightning (more directions in phases)
+      const directions = 8 + phase * 4;
       for (let i = 0; i < directions; i += 1) {
         this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / directions)));
       }
-      enemy.bossAbilityCd = 2200;
+      enemy.bossAbilityCd = 1800 * cdScale;
     } else if (floor === 40) {
-      // F40 "毒の蜘蛛" - poison swamp near player
-      this.spawnGroundHazard(
-        this.player.x + Phaser.Math.Between(-40, 40),
-        this.player.y + Phaser.Math.Between(-40, 40),
-        "Poison",
-        4000
-      );
-      enemy.bossAbilityCd = 1800;
-    } else if (floor === 100 && this.bossPhase >= 3) {
-      // F100 "深淵の王" phase 3 - edge projectiles
-      this.spawnEdgeProjectiles(enemy);
-      enemy.bossAbilityCd = 3000;
+      // F40 "毒の蜘蛛" - poison swamps (multiple in later phases)
+      for (let i = 0; i < phase + 1; i++) {
+        this.spawnGroundHazard(
+          this.player.x + Phaser.Math.Between(-60, 60),
+          this.player.y + Phaser.Math.Between(-60, 60),
+          "Poison", 5000
+        );
+      }
+      enemy.bossAbilityCd = 1500 * cdScale;
+    } else if (floor === 100) {
+      // F100 "深淵の王" - edge projectiles from phase 2+, all phases have bursts
+      if (phase >= 2) {
+        this.spawnEdgeProjectiles(enemy);
+      }
+      const burstCount = 4 + phase * 2;
+      for (let i = 0; i < burstCount; i++) {
+        this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / burstCount)));
+      }
+      enemy.bossAbilityCd = 2000 * cdScale;
     } else {
-      // No special ability for this floor; prevent re-checking every frame
       enemy.bossAbilityCd = 5000;
     }
   }
@@ -2200,7 +2219,7 @@ class DungeonScene extends Phaser.Scene {
   private getBossPhaseMultiplier(enemy: EnemySprite): number {
     const ratio = enemy.hp / enemy.maxHp;
     this.bossPhase = ratio > 0.6 ? 1 : ratio > 0.3 ? 2 : 3;
-    return this.bossPhase === 1 ? 1 : this.bossPhase === 2 ? 1.18 : 1.35;
+    return this.bossPhase === 1 ? 1 : this.bossPhase === 2 ? 1.4 : 1.8;
   }
 
   private tileLineOfSight(x0: number, y0: number, x1: number, y1: number): boolean {
