@@ -75,6 +75,10 @@ interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
   bossTag?: string;
   isDecoy?: boolean;
   bossAbilityCd: number;
+  strafeDir: number;
+  zigzagTimer: number;
+  chargeTimer: number;
+  wobblePhase: number;
 }
 
 interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
@@ -320,23 +324,40 @@ class BootScene extends Phaser.Scene {
     g.generateTexture("enemy-chaser", 20, 20);
     g.clear();
 
+    // Shooter: diamond/rhombus shape
     g.fillStyle(0x56cfe1, 1);
-    g.fillCircle(10, 10, 8);
+    g.beginPath();
+    g.moveTo(10, 1);
+    g.lineTo(19, 10);
+    g.lineTo(10, 19);
+    g.lineTo(1, 10);
+    g.closePath();
+    g.fillPath();
     g.generateTexture("enemy-shooter", 20, 20);
     g.clear();
 
+    // Rusher: triangle pointing right (arrow-like)
     g.fillStyle(0xff924c, 1);
-    g.fillCircle(10, 10, 8);
+    g.beginPath();
+    g.moveTo(19, 10);
+    g.lineTo(1, 1);
+    g.lineTo(1, 19);
+    g.closePath();
+    g.fillPath();
     g.generateTexture("enemy-rusher", 20, 20);
     g.clear();
 
+    // Splitter: two small circles side by side
     g.fillStyle(0xc77dff, 1);
-    g.fillCircle(10, 10, 8);
+    g.fillCircle(6, 10, 5);
+    g.fillCircle(14, 10, 5);
     g.generateTexture("enemy-splitter", 20, 20);
     g.clear();
 
+    // Summoner: circle with orbiting dot
     g.fillStyle(0x95d5b2, 1);
-    g.fillCircle(10, 10, 8);
+    g.fillCircle(10, 10, 6);
+    g.fillCircle(17, 4, 3);
     g.generateTexture("enemy-summoner", 20, 20);
     g.clear();
 
@@ -1007,6 +1028,10 @@ class DungeonScene extends Phaser.Scene {
       enemy.bossTier = bossProfile ? Math.max(1, Math.floor(this.run.floor / 10)) : 0;
       enemy.splitDepth = enemy.kind === "splitter" ? 1 : 0;
       enemy.bossAbilityCd = 0;
+      enemy.strafeDir = Math.random() < 0.5 ? 1 : -1;
+      enemy.zigzagTimer = 0;
+      enemy.chargeTimer = -1;
+      enemy.wobblePhase = Math.random() * Math.PI * 2;
       enemy.bossTag = bossProfile ? `boss-${this.run.floor}` : undefined;
       enemy.isDecoy = false;
       enemy.setDepth(3);
@@ -1020,6 +1045,7 @@ class DungeonScene extends Phaser.Scene {
         enemy.setTint(0xf4d35e);
       } else {
         enemy.setCircle(8);
+        enemy.setTint(attributeColor(enemy.attribute));
       }
       if (this.run.floor === 80 && bossProfile) {
         enemy.speed = 0;
@@ -1073,6 +1099,10 @@ class DungeonScene extends Phaser.Scene {
       twin.bossTier = boss.bossTier;
       twin.splitDepth = 0;
       twin.bossAbilityCd = 0;
+      twin.strafeDir = Math.random() < 0.5 ? 1 : -1;
+      twin.zigzagTimer = 0;
+      twin.chargeTimer = -1;
+      twin.wobblePhase = Math.random() * Math.PI * 2;
       twin.bossTag = "twin-ice";
       twin.isDecoy = false;
       twin.setDepth(3);
@@ -1112,6 +1142,10 @@ class DungeonScene extends Phaser.Scene {
         decoy.bossTier = boss.bossTier;
         decoy.splitDepth = 0;
         decoy.bossAbilityCd = 0;
+        decoy.strafeDir = Math.random() < 0.5 ? 1 : -1;
+        decoy.zigzagTimer = 0;
+        decoy.chargeTimer = -1;
+        decoy.wobblePhase = Math.random() * Math.PI * 2;
         decoy.bossTag = "shadow-decoy";
         decoy.isDecoy = true;
         decoy.setDepth(3);
@@ -1438,11 +1472,52 @@ class DungeonScene extends Phaser.Scene {
           }
           enemy.fireCooldown = 900;
         }
-      } else if (enemy.kind === "chaser" || enemy.kind === "splitter" || enemy.kind === "summoner") {
-        this.safeSetVelocity(enemy,direction.x * enemy.speed * speedMultiplier * bossPhaseMultiplier, direction.y * enemy.speed * speedMultiplier * bossPhaseMultiplier);
+      } else if (enemy.kind === "chaser") {
+        // Zigzag movement: periodically offset direction by ±30 degrees
+        enemy.zigzagTimer -= delta;
+        if (enemy.zigzagTimer <= 0) {
+          enemy.strafeDir = enemy.strafeDir > 0 ? -1 : 1;
+          enemy.zigzagTimer = 800;
+        }
+        const zigzagAngle = Phaser.Math.DegToRad(30 * enemy.strafeDir * (enemy.zigzagTimer / 800));
+        const cx = direction.x * Math.cos(zigzagAngle) - direction.y * Math.sin(zigzagAngle);
+        const cy = direction.x * Math.sin(zigzagAngle) + direction.y * Math.cos(zigzagAngle);
+        this.safeSetVelocity(enemy,cx * enemy.speed * speedMultiplier * bossPhaseMultiplier, cy * enemy.speed * speedMultiplier * bossPhaseMultiplier);
+      } else if (enemy.kind === "splitter") {
+        // Wobbling sine-wave movement
+        enemy.wobblePhase += delta * 0.006;
+        const wobbleOffset = Math.sin(enemy.wobblePhase) * 0.7;
+        const wx = direction.x + (-direction.y) * wobbleOffset;
+        const wy = direction.y + direction.x * wobbleOffset;
+        const wLen = Math.sqrt(wx * wx + wy * wy) || 1;
+        this.safeSetVelocity(enemy,(wx / wLen) * enemy.speed * speedMultiplier * bossPhaseMultiplier, (wy / wLen) * enemy.speed * speedMultiplier * bossPhaseMultiplier);
+      } else if (enemy.kind === "summoner") {
+        // Kiting: move away from the player to maintain distance
+        if (distance < 200) {
+          this.safeSetVelocity(enemy,-direction.x * enemy.speed * speedMultiplier * bossPhaseMultiplier, -direction.y * enemy.speed * speedMultiplier * bossPhaseMultiplier);
+        } else if (distance > 280) {
+          this.safeSetVelocity(enemy,direction.x * enemy.speed * 0.5 * speedMultiplier * bossPhaseMultiplier, direction.y * enemy.speed * 0.5 * speedMultiplier * bossPhaseMultiplier);
+        } else {
+          // Strafe at desired distance
+          const perpX = -direction.y * enemy.strafeDir;
+          const perpY = direction.x * enemy.strafeDir;
+          this.safeSetVelocity(enemy,perpX * enemy.speed * 0.6 * speedMultiplier * bossPhaseMultiplier, perpY * enemy.speed * 0.6 * speedMultiplier * bossPhaseMultiplier);
+        }
       } else if (enemy.kind === "shooter") {
         const desired = distance > 180 ? 1 : distance < 120 ? -1 : 0;
-        this.safeSetVelocity(enemy,direction.x * enemy.speed * desired * speedMultiplier, direction.y * enemy.speed * desired * speedMultiplier);
+        if (desired === 0) {
+          // Strafe around the player when at desired distance
+          enemy.zigzagTimer -= delta;
+          if (enemy.zigzagTimer <= 0) {
+            enemy.strafeDir = -enemy.strafeDir;
+            enemy.zigzagTimer = Phaser.Math.Between(1200, 2400);
+          }
+          const perpX = -direction.y * enemy.strafeDir;
+          const perpY = direction.x * enemy.strafeDir;
+          this.safeSetVelocity(enemy,perpX * enemy.speed * 0.7 * speedMultiplier, perpY * enemy.speed * 0.7 * speedMultiplier);
+        } else {
+          this.safeSetVelocity(enemy,direction.x * enemy.speed * desired * speedMultiplier, direction.y * enemy.speed * desired * speedMultiplier);
+        }
         if (enemy.fireCooldown <= 0) {
           const isF70Boss = this.run.floor === 70 && enemy.roomId === this.layout.bossRoomId;
           const volley = this.run.floor === 100 && enemy.roomId === this.layout.bossRoomId ? 4 : isF70Boss ? 3 : 1;
@@ -1456,8 +1531,28 @@ class DungeonScene extends Phaser.Scene {
           enemy.fireCooldown = Math.max(260, (isF70Boss ? baseCd * 0.7 : baseCd) - this.bossPhase * 70);
         }
       } else if (enemy.kind === "rusher") {
-        const speed = distance < 120 ? enemy.speed * 2.4 : enemy.speed * 0.7;
-        this.safeSetVelocity(enemy,direction.x * speed * speedMultiplier * bossPhaseMultiplier, direction.y * speed * speedMultiplier * bossPhaseMultiplier);
+        // Charge-up mechanic: brief pause before rushing
+        if (distance < 120 && enemy.chargeTimer < 0) {
+          // Entering rush range: start charge-up pause
+          enemy.chargeTimer = 200;
+          this.safeSetVelocity(enemy,0, 0);
+        } else if (enemy.chargeTimer > 0) {
+          // Charging up: hold still
+          enemy.chargeTimer -= delta;
+          this.safeSetVelocity(enemy,0, 0);
+        } else if (enemy.chargeTimer >= -1 && enemy.chargeTimer <= 0 && distance < 160) {
+          // Charge complete: rush at 3x speed
+          enemy.chargeTimer = -2;
+          const speed = enemy.speed * 3;
+          this.safeSetVelocity(enemy,direction.x * speed * speedMultiplier * bossPhaseMultiplier, direction.y * speed * speedMultiplier * bossPhaseMultiplier);
+        } else {
+          // Far away or already rushed: normal approach
+          if (distance >= 160) {
+            enemy.chargeTimer = -1; // Reset charge for next approach
+          }
+          const speed = enemy.chargeTimer <= -2 ? enemy.speed * 3 : enemy.speed * 0.7;
+          this.safeSetVelocity(enemy,direction.x * speed * speedMultiplier * bossPhaseMultiplier, direction.y * speed * speedMultiplier * bossPhaseMultiplier);
+        }
       }
 
       if (enemy.kind === "summoner" && enemy.summonCooldown <= 0) {
@@ -1545,6 +1640,10 @@ class DungeonScene extends Phaser.Scene {
     minion.bossTier = 0;
     minion.splitDepth = 0;
     minion.bossAbilityCd = 0;
+    minion.strafeDir = Math.random() < 0.5 ? 1 : -1;
+    minion.zigzagTimer = 0;
+    minion.chargeTimer = -1;
+    minion.wobblePhase = Math.random() * Math.PI * 2;
     minion.setCircle(8);
   }
 
@@ -1606,8 +1705,8 @@ class DungeonScene extends Phaser.Scene {
     });
   }
 
-  private onPlayerTouchesHazard(_playerObj: Phaser.GameObjects.GameObject, hazardObj: Phaser.GameObjects.GameObject): void {
-    const hazard = hazardObj as Phaser.Physics.Arcade.Image & { hazardAttribute: Attribute; hazardCooldown: number };
+  private onPlayerTouchesHazard(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
+    const hazard = (obj1 === this.player ? obj2 : obj1) as Phaser.Physics.Arcade.Image & { hazardAttribute: Attribute; hazardCooldown: number };
     if (!hazard.active || hazard.hazardCooldown > 0) {
       return;
     }
@@ -1882,8 +1981,8 @@ class DungeonScene extends Phaser.Scene {
     projectile.destroy();
   }
 
-  private onPlayerTouchesEnemy(_: Phaser.GameObjects.GameObject, enemyObj: Phaser.GameObjects.GameObject): void {
-    const enemy = enemyObj as EnemySprite;
+  private onPlayerTouchesEnemy(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
+    const enemy = (obj1 === this.player ? obj2 : obj1) as EnemySprite;
     if (!enemy.active || enemy.touchCooldown > 0) {
       return;
     }
@@ -1970,8 +2069,8 @@ class DungeonScene extends Phaser.Scene {
     });
   }
 
-  private onLootChest(_: Phaser.GameObjects.GameObject, chestObj: Phaser.GameObjects.GameObject): void {
-    const chest = chestObj as Phaser.Physics.Arcade.Image;
+  private onLootChest(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
+    const chest = (obj1 === this.player ? obj2 : obj1) as Phaser.Physics.Arcade.Image;
     sfx.play("pickup");
     this.spawnWandDrop(chest.x, chest.y, createRandomWand(this.run.floor + 4 + this.run.player.stats.F));
     this.spawnArmorDrop(chest.x + 16, chest.y, createRandomArmor(this.run.floor + 4 + this.run.player.stats.F));
@@ -1980,9 +2079,9 @@ class DungeonScene extends Phaser.Scene {
     chest.destroy();
   }
 
-  private onCollectLoot(_: Phaser.GameObjects.GameObject, lootObject: Phaser.GameObjects.GameObject): void {
-    const loot = lootObject as LootSprite;
-    if (!loot.active || this.scene.isActive("WandCompareScene")) {
+  private onCollectLoot(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
+    const loot = (obj1 === this.player ? obj2 : obj1) as LootSprite;
+    if (!loot.active || (loot as unknown) === this.player || this.scene.isActive("WandCompareScene")) {
       return;
     }
     loot.disableBody(true, false);
@@ -2348,9 +2447,9 @@ class DungeonScene extends Phaser.Scene {
     potion.setDepth(2);
   }
 
-  private onCollectPotion(_: Phaser.GameObjects.GameObject, potionObj: Phaser.GameObjects.GameObject): void {
-    const potion = potionObj as PotionSprite;
-    if (!potion.active) return;
+  private onCollectPotion(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
+    const potion = (obj1 === this.player ? obj2 : obj1) as PotionSprite;
+    if (!potion.active || (potion as unknown) === this.player) return;
     sfx.play("pickup");
     switch (potion.potionType) {
       case "hp": {
@@ -2375,9 +2474,9 @@ class DungeonScene extends Phaser.Scene {
     potion.destroy();
   }
 
-  private onCollectArmorDrop(_: Phaser.GameObjects.GameObject, armorObj: Phaser.GameObjects.GameObject): void {
-    const drop = armorObj as LootSprite;
-    if (!drop.active || this.scene.isActive("ArmorCompareScene")) {
+  private onCollectArmorDrop(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
+    const drop = (obj1 === this.player ? obj2 : obj1) as LootSprite;
+    if (!drop.active || (drop as unknown) === this.player || this.scene.isActive("ArmorCompareScene")) {
       return;
     }
     drop.disableBody(true, false);
