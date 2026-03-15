@@ -588,6 +588,7 @@ class DungeonScene extends Phaser.Scene {
   private joystickPointer?: Phaser.Input.Pointer;
   private knockbackVelocity = new Phaser.Math.Vector2();
   private isDying = false;
+  private stairsCooldown = 0;
   private currentRoomId?: number;
   private roomTitleText?: Phaser.GameObjects.Text;
   private roomTitleTimer = 0;
@@ -927,6 +928,9 @@ class DungeonScene extends Phaser.Scene {
   private doUpdate(delta: number): void {
     if (this.isDying) {
       return;
+    }
+    if (this.stairsCooldown > 0) {
+      this.stairsCooldown -= delta;
     }
     const room = this.findCurrentRoom();
     if (room?.id !== this.currentRoomId) {
@@ -1755,7 +1759,7 @@ class DungeonScene extends Phaser.Scene {
       this.showMessage("ボスを倒すまで階段は開かない");
       return;
     }
-    if (this.scene.isActive("StairsConfirmScene")) {
+    if (this.scene.isActive("StairsConfirmScene") || this.stairsCooldown > 0) {
       return;
     }
     sfx.play("stairs");
@@ -1767,6 +1771,7 @@ class DungeonScene extends Phaser.Scene {
         this.scene.restart(this.run);
       },
       onCancel: () => {
+        this.stairsCooldown = 1000;
         this.scene.resume();
       }
     });
