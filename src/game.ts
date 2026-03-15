@@ -1445,7 +1445,6 @@ class DungeonScene extends Phaser.Scene {
   private damagePlayer(amount: number, attribute: Attribute, bypassInvuln: boolean, cause = "不明"): void {
     const { died, damageDealt } = applyDamage(this.run.player, amount, attribute, bypassInvuln);
     if (damageDealt > 0) {
-      this.player.setVisible(true);
       console.log(`HIT: ${damageDealt.toFixed(1)} ${attribute} hp=${this.run.player.hp.toFixed(1)} died=${died}`);
     }
     if (died) {
@@ -1563,6 +1562,10 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private updatePlayerVisuals(): void {
+    if (!this.isDying) {
+      this.player.setVisible(true);
+      this.player.setAlpha(this.run.player.hitInvulnMs > 0 ? 0.5 : 1);
+    }
     if (this.run.player.thunderMs > 0) {
       this.player.setTint(0xffd166);
       this.player.setScale(1.08);
