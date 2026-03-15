@@ -1518,6 +1518,7 @@ class DungeonScene extends Phaser.Scene {
     }
     if (enemy.roomId === this.layout.bossRoomId && !enemy.isDecoy && !this.hasLivingBosses(enemy)) {
       this.bossDoors.clear(true, true);
+      this.stairs.setData("unlocked", true);
       this.stairs.setVisible(true);
       this.spawnWandDrop(enemy.x + 18, enemy.y, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
       this.showMessage("ボス撃破、階段が現れた");
@@ -1846,6 +1847,11 @@ class DungeonScene extends Phaser.Scene {
       }
       return true;
     });
+
+    const stairsUnlocked = this.layout.bossRoomId === undefined || this.stairs.getData("unlocked");
+    if (stairsUnlocked) {
+      this.stairs.setVisible(fogAt(this.stairs.x, this.stairs.y) > 0);
+    }
   }
 
   private drawMinimap(): void {
