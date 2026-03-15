@@ -1104,7 +1104,7 @@ class DungeonScene extends Phaser.Scene {
 
       enemy.touchCooldown -= delta;
       this.tickEnemyStatus(enemy, delta);
-      if (!enemy.active) {
+      if (!enemy.active || !enemy.body) {
         return true;
       }
 
