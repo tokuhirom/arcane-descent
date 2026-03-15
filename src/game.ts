@@ -11,6 +11,7 @@ import {
 import {
   applyDamage,
   applyPassiveTick,
+  healOnKill,
   updatePlayerTimers,
   processLevelUps,
   type PlayerState,
@@ -114,7 +115,7 @@ const STAT_LABELS: Record<StatKey, string> = {
 const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   P: "攻撃力UP",
   I: "視界範囲が広がる",
-  V: "最大HP+5, 被ダメ軽減, 自然回復UP",
+  V: "最大HP+5, 被ダメ軽減, 撃破時回復UP",
   F: "良質な武器の出現率UP",
   A: "属性攻撃・継続ダメージ強化",
   S: "移動速度・攻撃速度UP",
@@ -1617,6 +1618,7 @@ class DungeonScene extends Phaser.Scene {
 
   private killEnemy(enemy: EnemySprite): void {
     sfx.play("enemyDeath");
+    healOnKill(this.run.player);
     const gainedXp = 5 + Math.floor(this.run.floor / 2) + Math.floor(this.run.player.stats.A * 0.6);
     this.run.player.xp += gainedXp;
     if (Math.random() < 0.08 + this.run.player.stats.F * 0.01) {

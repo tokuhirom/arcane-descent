@@ -90,13 +90,14 @@ export function applyPassiveTick(player: PlayerState): TickResult {
     poisonDamage = result.damageDealt;
   }
 
-  let regen = 0;
-  if (player.burnMs <= 0) {
-    regen = 0.05 + player.stats.V * 0.015;
-    player.hp = Math.min(player.maxHp, player.hp + regen);
-  }
+  return { died: player.hp <= 0, burnDamage, poisonDamage, regen: 0 };
+}
 
-  return { died: player.hp <= 0, burnDamage, poisonDamage, regen };
+export function healOnKill(player: PlayerState): number {
+  const amount = 1 + player.stats.V * 0.3;
+  const healed = Math.min(amount, player.maxHp - player.hp);
+  player.hp += healed;
+  return healed;
 }
 
 export function processLevelUps(player: PlayerState): number {

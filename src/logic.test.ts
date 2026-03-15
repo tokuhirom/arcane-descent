@@ -4,6 +4,7 @@ import {
   applyPassiveTick,
   computeDamageReduction,
   createDefaultPlayer,
+  healOnKill,
   processLevelUps,
   updatePlayerTimers,
 } from "./logic";
@@ -109,28 +110,43 @@ describe("applyPassiveTick (DoT)", () => {
     expect(player.hp).toBeLessThan(36);
   });
 
-  it("burn 中は HP が自然回復しない", () => {
+  it("時間経過では自然回復しない", () => {
     const player = freshPlayer();
     player.hp = 20;
-    player.burnMs = 500;
     applyPassiveTick(player);
-    // burn ダメージで HP は減るが、regen は適用されない
-    expect(player.hp).toBeLessThan(20);
+    expect(player.hp).toBe(20);
   });
+});
 
-  it("ステータス異常なしなら自然回復する", () => {
+describe("healOnKill", () => {
+  it("敵撃破で回復する", () => {
     const player = freshPlayer();
     player.hp = 20;
-    const { regen } = applyPassiveTick(player);
-    expect(regen).toBeGreaterThan(0);
+    const healed = healOnKill(player);
+    expect(healed).toBeGreaterThan(0);
     expect(player.hp).toBeGreaterThan(20);
   });
 
   it("HP が maxHp を超えない", () => {
     const player = freshPlayer();
     player.hp = player.maxHp;
-    applyPassiveTick(player);
+    const healed = healOnKill(player);
+    expect(healed).toBe(0);
     expect(player.hp).toBe(player.maxHp);
+  });
+
+  it("V が高いほど回復量が多い", () => {
+    const low = freshPlayer();
+    low.hp = 20;
+    low.stats.V = 1;
+    const lowHeal = healOnKill(low);
+
+    const high = freshPlayer();
+    high.hp = 20;
+    high.stats.V = 10;
+    const highHeal = healOnKill(high);
+
+    expect(highHeal).toBeGreaterThan(lowHeal);
   });
 });
 
