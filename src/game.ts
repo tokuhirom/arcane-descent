@@ -360,7 +360,8 @@ class DungeonScene extends Phaser.Scene {
   private joystickBase?: Phaser.GameObjects.Arc;
   private joystickThumb?: Phaser.GameObjects.Arc;
   private joystickVector = new Phaser.Math.Vector2();
-  private joystickPointerId?: number;
+  private joystickPointer?: Phaser.Input.Pointer;
+  private knockbackVelocity = new Phaser.Math.Vector2();
   private currentRoomId?: number;
   private roomTitleText?: Phaser.GameObjects.Text;
   private roomTitleTimer = 0;
@@ -414,6 +415,7 @@ class DungeonScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setBounds(0, 0, this.layout.width * TILE_SIZE, this.layout.height * TILE_SIZE);
+    this.cameras.main.setZoom(1.1);
     this.physics.world.setBounds(0, 0, this.layout.width * TILE_SIZE, this.layout.height * TILE_SIZE);
 
     this.physics.add.overlap(this.projectiles, this.enemies, this.onProjectileHitsEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
@@ -453,26 +455,26 @@ class DungeonScene extends Phaser.Scene {
     const center = new Phaser.Math.Vector2(92, GAME_HEIGHT - 110);
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.joystickPointerId !== undefined) {
+      if (this.joystickPointer) {
         return;
       }
       if (Phaser.Math.Distance.Between(pointer.x, pointer.y, center.x, center.y) > 88) {
         return;
       }
-      this.joystickPointerId = pointer.id;
+      this.joystickPointer = pointer;
       this.updateJoystick(pointer);
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!pointer.isDown || pointer.id !== this.joystickPointerId) {
+      if (!pointer.isDown || pointer !== this.joystickPointer) {
         return;
       }
       this.updateJoystick(pointer);
     });
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.id !== this.joystickPointerId) {
+      if (pointer !== this.joystickPointer) {
         return;
       }
-      this.joystickPointerId = undefined;
+      this.joystickPointer = undefined;
       this.joystickVector.set(0, 0);
       this.joystickThumb?.setPosition(center.x, center.y);
     });
@@ -560,9 +562,9 @@ class DungeonScene extends Phaser.Scene {
       });
     }
 
-    this.handlePlayerMovement();
-    this.handleAutoFire(delta);
     this.updatePlayerStatus(delta);
+    this.handlePlayerMovement(delta);
+    this.handleAutoFire(delta);
     this.updateEnemies(delta);
     this.updateFog();
     this.syncUi();
@@ -587,7 +589,7 @@ class DungeonScene extends Phaser.Scene {
     this.roomTitleTimer = 1800;
   }
 
-  private handlePlayerMovement(): void {
+  private handlePlayerMovement(delta: number): void {
     const movement = new Phaser.Math.Vector2(0, 0);
     if (this.cursors.left?.isDown || this.wasd.A?.isDown) movement.x -= 1;
     if (this.cursors.right?.isDown || this.wasd.D?.isDown) movement.x += 1;
@@ -596,11 +598,28 @@ class DungeonScene extends Phaser.Scene {
     if (movement.lengthSq() === 0 && this.joystickVector.lengthSq() > 0) {
       movement.copy(this.joystickVector);
     }
-    if (movement.lengthSq() > 0) {
-      movement.normalize().scale(BASE_SPEED + this.run.player.stats.S * 6);
+
+    if (this.run.player.thunderMs > 0) {
+      movement.set(0, 0);
     }
-    this.player.setVelocity(movement.x, movement.y);
-    this.resolveWallCollision(this.player);
+
+    const speedMultiplier = this.run.player.iceMs > 0 ? 0.58 : 1;
+    if (movement.lengthSq() > 0) {
+      movement.normalize().scale((BASE_SPEED + this.run.player.stats.S * 6) * speedMultiplier);
+    }
+
+    if (this.knockbackVelocity.lengthSq() > 1) {
+      movement.add(this.knockbackVelocity);
+      this.knockbackVelocity.scale(0.84);
+    } else {
+      this.knockbackVelocity.set(0, 0);
+    }
+
+    const stepX = movement.x * (delta / 1000);
+    const stepY = movement.y * (delta / 1000);
+    this.moveActorWithCollisions(this.player, stepX, 0);
+    this.moveActorWithCollisions(this.player, 0, stepY);
+    this.player.setVelocity(0, 0);
   }
 
   private resolveWallCollision(bodyOwner: Phaser.Physics.Arcade.Sprite | Phaser.Physics.Arcade.Image): void {
@@ -623,6 +642,55 @@ class DungeonScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  private moveActorWithCollisions(
+    actor: Phaser.Physics.Arcade.Sprite | Phaser.Physics.Arcade.Image,
+    dx: number,
+    dy: number
+  ): void {
+    if (!actor.body) {
+      return;
+    }
+
+    const nextX = actor.x + dx;
+    const nextY = actor.y + dy;
+
+    if (dx !== 0 && !this.collidesAt(actor, nextX, actor.y)) {
+      actor.x = nextX;
+    }
+
+    if (dy !== 0 && !this.collidesAt(actor, actor.x, nextY)) {
+      actor.y = nextY;
+    }
+  }
+
+  private collidesAt(
+    actor: Phaser.Physics.Arcade.Sprite | Phaser.Physics.Arcade.Image,
+    x: number,
+    y: number
+  ): boolean {
+    if (!actor.body) {
+      return false;
+    }
+
+    const body = actor.body as Phaser.Physics.Arcade.Body;
+    const halfWidth = body.halfWidth;
+    const halfHeight = body.halfHeight;
+    const left = Math.floor((x - halfWidth) / TILE_SIZE);
+    const right = Math.floor((x + halfWidth) / TILE_SIZE);
+    const top = Math.floor((y - halfHeight) / TILE_SIZE);
+    const bottom = Math.floor((y + halfHeight) / TILE_SIZE);
+
+    for (let ty = top; ty <= bottom; ty += 1) {
+      for (let tx = left; tx <= right; tx += 1) {
+        if (!this.isWalkable(tx, ty)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   private handleAutoFire(delta: number): void {
@@ -917,8 +985,7 @@ class DungeonScene extends Phaser.Scene {
     }
     enemy.touchCooldown = 700;
     this.damagePlayer(6 + this.run.floor * 0.25 + enemy.bossTier * 2, enemy.attribute);
-    const knockback = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize().scale(200);
-    this.player.setVelocity(knockback.x, knockback.y);
+    this.knockbackVelocity = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize().scale(220);
   }
 
   private damagePlayer(amount: number, attribute: Attribute): void {
@@ -960,8 +1027,6 @@ class DungeonScene extends Phaser.Scene {
   private updatePlayerStatus(delta: number): void {
     if (this.run.player.thunderMs > 0) {
       this.run.player.thunderMs -= delta;
-      this.player.setVelocity(0, 0);
-      return;
     }
 
     this.passiveTickMs += delta;
