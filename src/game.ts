@@ -2415,8 +2415,25 @@ class DungeonScene extends Phaser.Scene {
     this.messageText.setAlpha(1);
   }
 
+  private findWalkableNear(x: number, y: number): { x: number; y: number } {
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    if (this.isWalkable(tx, ty)) return { x, y };
+    for (let r = 1; r <= 3; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (this.isWalkable(tx + dx, ty + dy)) {
+            return { x: (tx + dx + 0.5) * TILE_SIZE, y: (ty + dy + 0.5) * TILE_SIZE };
+          }
+        }
+      }
+    }
+    return { x, y };
+  }
+
   private spawnWandDrop(x: number, y: number, wand: Wand): void {
-    const loot = this.lootDrops.create(x, y, "wand-drop") as LootSprite;
+    const pos = this.findWalkableNear(x, y);
+    const loot = this.lootDrops.create(pos.x, pos.y, "wand-drop") as LootSprite;
     loot.lootType = "wand";
     loot.wand = wand;
     loot.setTint(attributeColor(wand.attribute));
@@ -2425,7 +2442,8 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private spawnArmorDrop(x: number, y: number, armor: Armor): void {
-    const drop = this.armorDrops.create(x, y, "armor-drop") as LootSprite;
+    const pos = this.findWalkableNear(x, y);
+    const drop = this.armorDrops.create(pos.x, pos.y, "armor-drop") as LootSprite;
     drop.lootType = "armor";
     drop.armor = armor;
     drop.setTint(attributeColor(armor.attribute));
@@ -2442,7 +2460,8 @@ class DungeonScene extends Phaser.Scene {
       power: "potion-power",
       speed: "potion-speed",
     };
-    const potion = this.potions.create(x, y, textureMap[potionType]) as PotionSprite;
+    const pos = this.findWalkableNear(x, y);
+    const potion = this.potions.create(pos.x, pos.y, textureMap[potionType]) as PotionSprite;
     potion.potionType = potionType;
     potion.setDepth(2);
   }
