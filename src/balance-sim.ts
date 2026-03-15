@@ -69,18 +69,20 @@ function createRandomWand(floor: number, starter = false): Wand {
 // ---- DPS calculation (mirroring game logic) ----
 
 function calcDps(wand: Wand, stats: PlayerStats, powerBoost = false): number {
-  const dmg = wand.stats.damage * (1 + stats.P * 0.08) * (powerBoost ? 1.5 : 1);
+  const baseDmg = wand.stats.damage * (1 + stats.P * 0.08) * (powerBoost ? 1.5 : 1);
   const interval = Math.max(120, wand.stats.fireRate - stats.S * 12);
-  const shots = wand.specialEffects.includes("Multishot") ? 3 : 1;
-  const critMultiplier = 1 + stats.T * 0.015 * 0.7; // average crit contribution
-  return dmg * shots * critMultiplier / (interval / 1000);
+  const isMulti = wand.specialEffects.includes("Multishot");
+  const perShot = isMulti ? baseDmg * 0.45 : baseDmg;
+  const shots = isMulti ? 3 : 1;
+  const critMultiplier = 1 + stats.T * 0.015 * 0.7;
+  return perShot * shots * critMultiplier / (interval / 1000);
 }
 
 // ---- Boss HP calculation (mirroring game.ts) ----
 
 const BOSS_MULTIPLIERS: Record<number, number> = {
-  10: 40, 20: 80, 30: 140, 40: 200, 50: 250,
-  60: 280, 70: 310, 80: 350, 90: 340, 100: 450
+  10: 20, 20: 60, 30: 80, 40: 100, 50: 130,
+  60: 170, 70: 200, 80: 220, 90: 210, 100: 300
 };
 
 function bossHp(floor: number): number {
