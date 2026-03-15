@@ -92,7 +92,7 @@ export function applyPassiveTick(player: PlayerState): TickResult {
 
   let regen = 0;
   if (player.burnMs <= 0) {
-    regen = 0.18 + player.stats.V * 0.03;
+    regen = 0.05 + player.stats.V * 0.015;
     player.hp = Math.min(player.maxHp, player.hp + regen);
   }
 
