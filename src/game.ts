@@ -1019,7 +1019,7 @@ class DungeonScene extends Phaser.Scene {
       enemy.resistance = pick(ATTRIBUTES);
       enemy.maxHp = (18 + this.run.floor * 2 + (spawn.elite ? 24 : 0)) * (bossProfile?.maxHpMultiplier ?? 1);
       enemy.hp = enemy.maxHp;
-      enemy.speed = (40 + this.run.floor * 0.9 + (enemy.kind === "rusher" ? 20 : 0) + (spawn.elite ? 18 : 0)) * (bossProfile?.speedMultiplier ?? 1);
+      enemy.speed = (50 + this.run.floor * 1.2 + (enemy.kind === "rusher" ? 25 : 0) + (spawn.elite ? 22 : 0)) * (bossProfile?.speedMultiplier ?? 1);
       enemy.burnMs = 0;
       enemy.slowMs = 0;
       enemy.stunMs = 0;
@@ -1527,7 +1527,7 @@ class DungeonScene extends Phaser.Scene {
               : Phaser.Math.DegToRad(-18 + i * 12);
             this.spawnEnemyProjectile(enemy, spread);
           }
-          const baseCd = enemy.bossTier > 0 ? BOSS_PROFILES[this.run.floor].fireCooldown : 900;
+          const baseCd = enemy.bossTier > 0 ? BOSS_PROFILES[this.run.floor].fireCooldown : Math.max(400, 900 - this.run.floor * 6);
           enemy.fireCooldown = Math.max(260, (isF70Boss ? baseCd * 0.7 : baseCd) - this.bossPhase * 70);
         }
       } else if (enemy.kind === "rusher") {
@@ -1611,11 +1611,11 @@ class DungeonScene extends Phaser.Scene {
     projectile.setTint(attributeColor(enemy.attribute));
     if (!projectile.body) return;
     if (spread === 0) {
-      this.physics.moveToObject(projectile, this.player, 220 + this.run.floor + enemy.bossTier * 18);
+      this.physics.moveToObject(projectile, this.player, 260 + this.run.floor * 2 + enemy.bossTier * 18);
       return;
     }
     const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y) + spread;
-    this.physics.velocityFromRotation(angle, 220 + this.run.floor + enemy.bossTier * 18, (projectile.body as Phaser.Physics.Arcade.Body).velocity);
+    this.physics.velocityFromRotation(angle, 260 + this.run.floor * 2 + enemy.bossTier * 18, (projectile.body as Phaser.Physics.Arcade.Body).velocity);
   }
 
   private spawnMinion(enemy: EnemySprite): void {
@@ -1990,7 +1990,8 @@ class DungeonScene extends Phaser.Scene {
     const killerName = enemy.bossTier > 0
       ? (BOSS_PROFILES[this.run.floor]?.name ?? `${enemy.attribute}のボス`)
       : `${enemy.attribute}の${enemy.kind}`;
-    this.damagePlayer(6 + this.run.floor * 0.25 + enemy.bossTier * 2, enemy.attribute, false, killerName);
+    const touchDmg = (enemy.kind === "rusher" ? 10 : 6) + this.run.floor * 0.4 + enemy.bossTier * 3;
+    this.damagePlayer(touchDmg, enemy.attribute, false, killerName);
     if (this.run.player.armor.specialEffect === "Thorns" && enemy.active) {
       enemy.hp -= 3;
       if (enemy.hp <= 0) {
