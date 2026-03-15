@@ -121,16 +121,16 @@ const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   T: "クリティカル率UP"
 };
 const BOSS_PROFILES: Record<number, BossProfile> = {
-  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 3.1, speedMultiplier: 1.25, fireCooldown: 1200 },
-  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 3.6, speedMultiplier: 0.85, fireCooldown: 1000 },
-  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 3.0, speedMultiplier: 1.6, fireCooldown: 700 },
-  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 3.5, speedMultiplier: 1.05, fireCooldown: 1100 },
-  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 4.0, speedMultiplier: 1.1, fireCooldown: 820 },
-  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 3.7, speedMultiplier: 1.2, fireCooldown: 900 },
-  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 4.1, speedMultiplier: 1.3, fireCooldown: 620 },
-  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 4.8, speedMultiplier: 0.4, fireCooldown: 950 },
-  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 4.4, speedMultiplier: 1.5, fireCooldown: 760 },
-  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 6.5, speedMultiplier: 1.25, fireCooldown: 650 }
+  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 12, speedMultiplier: 1.25, fireCooldown: 1200 },
+  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 14, speedMultiplier: 0.85, fireCooldown: 1000 },
+  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 13, speedMultiplier: 1.6, fireCooldown: 700 },
+  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 15, speedMultiplier: 1.05, fireCooldown: 1100 },
+  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 16, speedMultiplier: 1.1, fireCooldown: 820 },
+  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 14, speedMultiplier: 1.2, fireCooldown: 900 },
+  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 17, speedMultiplier: 1.3, fireCooldown: 620 },
+  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 20, speedMultiplier: 0.4, fireCooldown: 950 },
+  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 18, speedMultiplier: 1.5, fireCooldown: 760 },
+  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 25, speedMultiplier: 1.25, fireCooldown: 650 }
 };
 
 const sfx = new SfxManager();
