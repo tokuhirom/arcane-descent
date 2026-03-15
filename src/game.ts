@@ -89,8 +89,8 @@ interface BossProfile {
   fireCooldown: number;
 }
 
-const GAME_WIDTH = 960;
-const GAME_HEIGHT = 720;
+const GAME_WIDTH = 540;
+const GAME_HEIGHT = 960;
 const BASE_SPEED = 180;
 const ATTRIBUTES: Attribute[] = ["Fire", "Ice", "Thunder", "Poison", "None"];
 const RARITIES: Rarity[] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"];
@@ -261,11 +261,11 @@ class BossIntroScene extends Phaser.Scene {
   }
 
   create(data: { floor: number }): void {
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 500, 180, 0x120f1d, 0.92)
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 420, 180, 0x120f1d, 0.92)
       .setStrokeStyle(2, 0xf4d35e);
-    makeText(this, panel.x - 185, panel.y - 40, `BOSS FLOOR ${data.floor}`, 22, "#f4d35e");
-    makeText(this, panel.x - 185, panel.y + 5, bossName(data.floor), 34, "#ffffff");
-    makeText(this, panel.x - 185, panel.y + 55, "Press SPACE / Tap to descend", 18, "#cdb4db");
+    makeText(this, panel.x - 150, panel.y - 40, `BOSS FLOOR ${data.floor}`, 22, "#f4d35e");
+    makeText(this, panel.x - 150, panel.y + 5, bossName(data.floor), 30, "#ffffff");
+    makeText(this, panel.x - 150, panel.y + 55, "Press SPACE / Tap to descend", 18, "#cdb4db");
     this.input.once("pointerdown", () => this.scene.stop());
     this.input.keyboard?.once("keydown-SPACE", () => this.scene.stop());
   }
@@ -277,15 +277,15 @@ class LevelUpScene extends Phaser.Scene {
   }
 
   create(data: { stats: Record<StatKey, number>; onPick: (key: StatKey) => void }): void {
-    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 640, 420, 0x0f1020, 0.94)
+    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 470, 560, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
-    makeText(this, bg.x - 250, bg.y - 160, "Level Up", 34, "#f8f1ff");
-    makeText(this, bg.x - 250, bg.y - 120, "1つ選んで強化", 18, "#cdb4db");
+    makeText(this, bg.x - 190, bg.y - 230, "Level Up", 34, "#f8f1ff");
+    makeText(this, bg.x - 190, bg.y - 190, "1つ選んで強化", 18, "#cdb4db");
 
     STAT_KEYS.forEach((key, index) => {
-      const x = bg.x - 240 + (index % 2) * 280;
-      const y = bg.y - 70 + Math.floor(index / 2) * 72;
-      const button = this.add.rectangle(x + 110, y + 20, 220, 52, 0x241734, 1)
+      const x = bg.x - 170;
+      const y = bg.y - 140 + index * 58;
+      const button = this.add.rectangle(x + 160, y + 20, 320, 44, 0x241734, 1)
         .setInteractive({ useHandCursor: true })
         .setStrokeStyle(1, 0xf4d35e);
       makeText(this, x + 16, y + 6, `${key}  ${STAT_LABELS[key]}`, 20, "#fff2b2");
@@ -322,10 +322,10 @@ class EndingScene extends Phaser.Scene {
 
   create(): void {
     const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x06070d, 0.95);
-    makeText(this, 160, 180, "Arcane Descent", 42, "#f4d35e");
-    makeText(this, 160, 250, "深淵の王は倒れ、迷宮は静寂を取り戻した。", 24, "#f8f1ff");
-    makeText(this, 160, 300, "だが魔力の残響はまだ地下に満ちている。", 24, "#cdb4db");
-    makeText(this, 160, 400, "Press R to descend again", 22, "#f8f1ff");
+    makeText(this, 48, 220, "Arcane Descent", 42, "#f4d35e");
+    makeText(this, 48, 310, "深淵の王は倒れ、迷宮は静寂を取り戻した。", 24, "#f8f1ff");
+    makeText(this, 48, 360, "だが魔力の残響はまだ地下に満ちている。", 24, "#cdb4db");
+    makeText(this, 48, 450, "Press R to descend again", 22, "#f8f1ff");
     this.input.keyboard?.once("keydown-R", () => {
       this.scene.stop();
       this.scene.stop("DungeonScene");
@@ -360,6 +360,7 @@ class DungeonScene extends Phaser.Scene {
   private joystickBase?: Phaser.GameObjects.Arc;
   private joystickThumb?: Phaser.GameObjects.Arc;
   private joystickVector = new Phaser.Math.Vector2();
+  private joystickPointerId?: number;
   private currentRoomId?: number;
   private roomTitleText?: Phaser.GameObjects.Text;
   private roomTitleTimer = 0;
@@ -433,11 +434,11 @@ class DungeonScene extends Phaser.Scene {
   private createUi(): void {
     this.hpText = makeText(this, 16, 12, "", 20).setScrollFactor(0);
     this.xpText = makeText(this, 16, 40, "", 16, "#d9d9ff").setScrollFactor(0);
-    this.floorText = makeText(this, GAME_WIDTH - 170, 12, "", 20, "#fff2b2").setScrollFactor(0);
-    this.wandText = makeText(this, 16, GAME_HEIGHT - 80, "", 16, "#f8f1ff").setScrollFactor(0);
+    this.floorText = makeText(this, GAME_WIDTH - 80, 12, "", 20, "#fff2b2").setScrollFactor(0);
+    this.wandText = makeText(this, 16, GAME_HEIGHT - 180, "", 16, "#f8f1ff").setScrollFactor(0);
     this.statusText = makeText(this, 16, 66, "", 16, "#9ad1ff").setScrollFactor(0);
-    this.messageText = makeText(this, GAME_WIDTH / 2 - 180, GAME_HEIGHT - 34, "", 18, "#fff2b2").setScrollFactor(0);
-    this.pauseButton = makeText(this, GAME_WIDTH - 70, GAME_HEIGHT - 60, "[II]", 24, "#f8f1ff")
+    this.messageText = makeText(this, 24, GAME_HEIGHT - 34, "", 18, "#fff2b2").setScrollFactor(0);
+    this.pauseButton = makeText(this, GAME_WIDTH - 64, GAME_HEIGHT - 90, "[II]", 24, "#f8f1ff")
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
     this.pauseButton.on("pointerdown", () => {
@@ -447,35 +448,44 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private createJoystick(): void {
-    this.joystickBase = this.add.circle(92, GAME_HEIGHT - 88, 44, 0x3a254f, 0.4).setScrollFactor(0);
-    this.joystickThumb = this.add.circle(92, GAME_HEIGHT - 88, 18, 0xcdb4db, 0.6).setScrollFactor(0);
+    this.joystickBase = this.add.circle(92, GAME_HEIGHT - 110, 44, 0x3a254f, 0.4).setScrollFactor(0);
+    this.joystickThumb = this.add.circle(92, GAME_HEIGHT - 110, 18, 0xcdb4db, 0.6).setScrollFactor(0);
+    const center = new Phaser.Math.Vector2(92, GAME_HEIGHT - 110);
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.x > 200 || pointer.y < GAME_HEIGHT - 200) {
+      if (this.joystickPointerId !== undefined) {
         return;
       }
+      if (Phaser.Math.Distance.Between(pointer.x, pointer.y, center.x, center.y) > 88) {
+        return;
+      }
+      this.joystickPointerId = pointer.id;
       this.updateJoystick(pointer);
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!pointer.isDown) {
+      if (!pointer.isDown || pointer.id !== this.joystickPointerId) {
         return;
       }
       this.updateJoystick(pointer);
     });
-    this.input.on("pointerup", () => {
+    this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.id !== this.joystickPointerId) {
+        return;
+      }
+      this.joystickPointerId = undefined;
       this.joystickVector.set(0, 0);
-      this.joystickThumb?.setPosition(92, GAME_HEIGHT - 88);
+      this.joystickThumb?.setPosition(center.x, center.y);
     });
   }
 
   private updateJoystick(pointer: Phaser.Input.Pointer): void {
-    const center = new Phaser.Math.Vector2(92, GAME_HEIGHT - 88);
-    const v = new Phaser.Math.Vector2(pointer.x - center.x, pointer.y - center.y);
-    if (v.length() > 36) {
-      v.setLength(36);
+    const center = new Phaser.Math.Vector2(92, GAME_HEIGHT - 110);
+    const offset = new Phaser.Math.Vector2(pointer.x - center.x, pointer.y - center.y);
+    if (offset.length() > 36) {
+      offset.setLength(36);
     }
-    this.joystickVector.copy(v.scale(1 / 36));
-    this.joystickThumb?.setPosition(center.x + v.x, center.y + v.y);
+    this.joystickVector.copy(offset).scale(1 / 36);
+    this.joystickThumb?.setPosition(center.x + offset.x, center.y + offset.y);
   }
 
   private drawDungeon(): void {
@@ -1031,12 +1041,12 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private drawMinimap(): void {
-    const x0 = GAME_WIDTH - 166;
-    const y0 = 48;
+    const x0 = GAME_WIDTH - 126;
+    const y0 = 44;
     const cell = 5;
     this.minimapGraphics.clear();
     this.minimapGraphics.fillStyle(0x0e1320, 0.85);
-    this.minimapGraphics.fillRect(x0 - 8, y0 - 8, 160, 120);
+    this.minimapGraphics.fillRect(x0 - 8, y0 - 8, 118, 140);
 
     for (let y = 0; y < this.layout.height; y += 1) {
       for (let x = 0; x < this.layout.width; x += 1) {
