@@ -36,6 +36,11 @@ interface PlayerState {
   statPoints: number;
   stats: Record<StatKey, number>;
   wand: Wand;
+  burnMs: number;
+  iceMs: number;
+  thunderMs: number;
+  poisonMs: number;
+  defenseBreak: number;
 }
 
 interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
@@ -51,6 +56,13 @@ interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
   weakness: Attribute;
   resistance: Attribute;
   summonCooldown: number;
+  burnMs: number;
+  slowMs: number;
+  stunMs: number;
+  defenseBreak: number;
+  touchCooldown: number;
+  bossTier: number;
+  splitDepth: number;
 }
 
 interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
@@ -68,6 +80,15 @@ interface RunState {
   player: PlayerState;
 }
 
+interface BossProfile {
+  name: string;
+  attribute: Attribute;
+  kind: EnemyKind;
+  maxHpMultiplier: number;
+  speedMultiplier: number;
+  fireCooldown: number;
+}
+
 const GAME_WIDTH = 960;
 const GAME_HEIGHT = 720;
 const BASE_SPEED = 180;
@@ -83,6 +104,18 @@ const STAT_LABELS: Record<StatKey, string> = {
   A: "Arcana",
   S: "Swiftness",
   T: "Fate"
+};
+const BOSS_PROFILES: Record<number, BossProfile> = {
+  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 3.1, speedMultiplier: 1.25, fireCooldown: 1200 },
+  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 3.6, speedMultiplier: 0.85, fireCooldown: 1000 },
+  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 3.0, speedMultiplier: 1.6, fireCooldown: 700 },
+  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 3.5, speedMultiplier: 1.05, fireCooldown: 1100 },
+  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 4.0, speedMultiplier: 1.1, fireCooldown: 820 },
+  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 3.7, speedMultiplier: 1.2, fireCooldown: 900 },
+  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 4.1, speedMultiplier: 1.3, fireCooldown: 620 },
+  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 4.8, speedMultiplier: 0.4, fireCooldown: 950 },
+  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 4.4, speedMultiplier: 1.5, fireCooldown: 760 },
+  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 6.5, speedMultiplier: 1.25, fireCooldown: 650 }
 };
 
 function pick<T>(values: T[]): T {
@@ -116,7 +149,12 @@ function createStarterState(): RunState {
         S: 4,
         T: 4
       },
-      wand: createRandomWand(1, true)
+      wand: createRandomWand(1, true),
+      burnMs: 0,
+      iceMs: 0,
+      thunderMs: 0,
+      poisonMs: 0,
+      defenseBreak: 0
     }
   };
 }
@@ -316,11 +354,17 @@ class DungeonScene extends Phaser.Scene {
   private xpText!: Phaser.GameObjects.Text;
   private floorText!: Phaser.GameObjects.Text;
   private wandText!: Phaser.GameObjects.Text;
+  private statusText!: Phaser.GameObjects.Text;
+  private messageText!: Phaser.GameObjects.Text;
   private pauseButton!: Phaser.GameObjects.Text;
   private joystickBase?: Phaser.GameObjects.Arc;
   private joystickThumb?: Phaser.GameObjects.Arc;
   private joystickVector = new Phaser.Math.Vector2();
   private currentRoomId?: number;
+  private roomTitleText?: Phaser.GameObjects.Text;
+  private roomTitleTimer = 0;
+  private passiveTickMs = 0;
+  private bossPhase = 1;
 
   constructor() {
     super("DungeonScene");
@@ -373,6 +417,7 @@ class DungeonScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.projectiles, this.enemies, this.onProjectileHitsEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
     this.physics.add.overlap(this.enemyProjectiles, this.player, this.onEnemyProjectileHitsPlayer as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
+    this.physics.add.overlap(this.player, this.enemies, this.onPlayerTouchesEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
     this.physics.add.overlap(this.player, this.chests, this.onLootChest as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
     this.physics.add.overlap(this.player, this.stairs, this.onReachStairs as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
 
@@ -390,6 +435,8 @@ class DungeonScene extends Phaser.Scene {
     this.xpText = makeText(this, 16, 40, "", 16, "#d9d9ff").setScrollFactor(0);
     this.floorText = makeText(this, GAME_WIDTH - 170, 12, "", 20, "#fff2b2").setScrollFactor(0);
     this.wandText = makeText(this, 16, GAME_HEIGHT - 80, "", 16, "#f8f1ff").setScrollFactor(0);
+    this.statusText = makeText(this, 16, 66, "", 16, "#9ad1ff").setScrollFactor(0);
+    this.messageText = makeText(this, GAME_WIDTH / 2 - 180, GAME_HEIGHT - 34, "", 18, "#fff2b2").setScrollFactor(0);
     this.pauseButton = makeText(this, GAME_WIDTH - 70, GAME_HEIGHT - 60, "[II]", 24, "#f8f1ff")
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
@@ -450,23 +497,35 @@ class DungeonScene extends Phaser.Scene {
   private spawnEncounters(): void {
     this.layout.spawns.forEach((spawn) => {
       const enemy = this.enemies.create(spawn.x * TILE_SIZE, spawn.y * TILE_SIZE, `enemy-${spawn.kind}`) as EnemySprite;
+      const bossProfile = spawn.roomId === this.layout.bossRoomId ? BOSS_PROFILES[this.run.floor] : undefined;
       enemy.roomId = spawn.roomId;
-      enemy.kind = spawn.kind;
+      enemy.kind = bossProfile?.kind ?? spawn.kind;
       enemy.elite = spawn.elite;
       enemy.activeRoom = false;
-      enemy.fireCooldown = 0;
+      enemy.fireCooldown = bossProfile?.fireCooldown ?? 0;
       enemy.summonCooldown = Phaser.Math.Between(1800, 3600);
-      enemy.attribute = pick(ATTRIBUTES);
+      enemy.attribute = bossProfile?.attribute ?? pick(ATTRIBUTES);
       enemy.weakness = pick(ATTRIBUTES);
       enemy.resistance = pick(ATTRIBUTES);
-      enemy.maxHp = 18 + this.run.floor * 2 + (spawn.elite ? 24 : 0);
+      enemy.maxHp = (18 + this.run.floor * 2 + (spawn.elite ? 24 : 0)) * (bossProfile?.maxHpMultiplier ?? 1);
       enemy.hp = enemy.maxHp;
-      enemy.speed = 40 + this.run.floor * 0.9 + (spawn.kind === "rusher" ? 20 : 0) + (spawn.elite ? 18 : 0);
+      enemy.speed = (40 + this.run.floor * 0.9 + (enemy.kind === "rusher" ? 20 : 0) + (spawn.elite ? 18 : 0)) * (bossProfile?.speedMultiplier ?? 1);
+      enemy.burnMs = 0;
+      enemy.slowMs = 0;
+      enemy.stunMs = 0;
+      enemy.defenseBreak = 0;
+      enemy.touchCooldown = 0;
+      enemy.bossTier = bossProfile ? Math.max(1, Math.floor(this.run.floor / 10)) : 0;
+      enemy.splitDepth = enemy.kind === "splitter" ? 1 : 0;
       enemy.setDepth(3);
       enemy.setCircle(8);
-      if (spawn.elite) {
+      if (spawn.elite || bossProfile) {
         enemy.setScale(1.24);
         enemy.setTint(0xf4d35e);
+      }
+      if (bossProfile) {
+        enemy.setScale(1.7);
+        enemy.setTint(attributeColor(enemy.attribute));
       }
     });
 
@@ -482,6 +541,7 @@ class DungeonScene extends Phaser.Scene {
     const room = this.findCurrentRoom();
     if (room?.id !== this.currentRoomId) {
       this.currentRoomId = room?.id;
+      this.showRoomTitle(room);
       this.enemies.children.iterate((child) => {
         const enemy = child as EnemySprite | null;
         if (!enemy) return true;
@@ -492,9 +552,29 @@ class DungeonScene extends Phaser.Scene {
 
     this.handlePlayerMovement();
     this.handleAutoFire(delta);
+    this.updatePlayerStatus(delta);
     this.updateEnemies(delta);
     this.updateFog();
     this.syncUi();
+    this.updateTransientUi(delta);
+  }
+
+  private showRoomTitle(room?: Room): void {
+    if (!room) {
+      return;
+    }
+    const labels: Record<Room["kind"], string> = {
+      start: "Start Room",
+      normal: "Normal Room",
+      treasure: "Treasure Room",
+      stairs: "Stairs Room",
+      boss: `Boss Room: ${bossName(this.run.floor)}`
+    };
+    this.roomTitleText?.destroy();
+    this.roomTitleText = makeText(this, GAME_WIDTH / 2 - 160, 100, labels[room.kind], 22, "#fff2b2")
+      .setScrollFactor(0)
+      .setDepth(10);
+    this.roomTitleTimer = 1800;
   }
 
   private handlePlayerMovement(): void {
@@ -589,7 +669,15 @@ class DungeonScene extends Phaser.Scene {
         return true;
       }
 
+      enemy.touchCooldown -= delta;
+      this.tickEnemyStatus(enemy, delta);
+
       if (!enemy.activeRoom) {
+        enemy.setVelocity(0, 0);
+        return true;
+      }
+
+      if (enemy.stunMs > 0) {
         enemy.setVelocity(0, 0);
         return true;
       }
@@ -598,24 +686,29 @@ class DungeonScene extends Phaser.Scene {
       enemy.summonCooldown -= delta;
       const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
       const direction = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize();
+      const speedMultiplier = enemy.slowMs > 0 ? 0.55 : 1;
+      const bossPhaseMultiplier = enemy.bossTier > 0 ? this.getBossPhaseMultiplier(enemy) : 1;
 
       if (enemy.kind === "chaser" || enemy.kind === "splitter" || enemy.kind === "summoner") {
-        enemy.setVelocity(direction.x * enemy.speed, direction.y * enemy.speed);
+        enemy.setVelocity(direction.x * enemy.speed * speedMultiplier * bossPhaseMultiplier, direction.y * enemy.speed * speedMultiplier * bossPhaseMultiplier);
       } else if (enemy.kind === "shooter") {
         const desired = distance > 180 ? 1 : distance < 120 ? -1 : 0;
-        enemy.setVelocity(direction.x * enemy.speed * desired, direction.y * enemy.speed * desired);
+        enemy.setVelocity(direction.x * enemy.speed * desired * speedMultiplier, direction.y * enemy.speed * desired * speedMultiplier);
         if (enemy.fireCooldown <= 0) {
           this.spawnEnemyProjectile(enemy);
-          enemy.fireCooldown = 900;
+          enemy.fireCooldown = Math.max(260, (enemy.bossTier > 0 ? BOSS_PROFILES[this.run.floor].fireCooldown : 900) - this.bossPhase * 70);
         }
       } else if (enemy.kind === "rusher") {
         const speed = distance < 120 ? enemy.speed * 2.4 : enemy.speed * 0.7;
-        enemy.setVelocity(direction.x * speed, direction.y * speed);
+        enemy.setVelocity(direction.x * speed * speedMultiplier * bossPhaseMultiplier, direction.y * speed * speedMultiplier * bossPhaseMultiplier);
       }
 
       if (enemy.kind === "summoner" && enemy.summonCooldown <= 0) {
-        this.spawnMinion(enemy);
-        enemy.summonCooldown = 3200;
+        const summonCount = enemy.bossTier >= 4 ? 2 : 1;
+        for (let i = 0; i < summonCount; i += 1) {
+          this.spawnMinion(enemy);
+        }
+        enemy.summonCooldown = Math.max(1100, 3200 - enemy.bossTier * 180);
       }
 
       this.resolveWallCollision(enemy);
@@ -646,7 +739,7 @@ class DungeonScene extends Phaser.Scene {
   private spawnEnemyProjectile(enemy: EnemySprite): void {
     const projectile = this.enemyProjectiles.create(enemy.x, enemy.y, "projectile") as ProjectileSprite;
     projectile.owner = "enemy";
-    projectile.damage = 5 + this.run.floor * 0.4;
+    projectile.damage = 5 + this.run.floor * 0.4 + enemy.bossTier * 2;
     projectile.piercing = 1;
     projectile.attribute = enemy.attribute;
     projectile.specialEffects = [];
@@ -654,7 +747,7 @@ class DungeonScene extends Phaser.Scene {
     projectile.lifetimeMs = 1400;
     projectile.setScale(0.75);
     projectile.setTint(attributeColor(enemy.attribute));
-    this.physics.moveToObject(projectile, this.player, 220 + this.run.floor);
+    this.physics.moveToObject(projectile, this.player, 220 + this.run.floor + enemy.bossTier * 18);
   }
 
   private spawnMinion(enemy: EnemySprite): void {
@@ -671,6 +764,13 @@ class DungeonScene extends Phaser.Scene {
     minion.maxHp = 10 + this.run.floor;
     minion.hp = minion.maxHp;
     minion.speed = 60 + this.run.floor;
+    minion.burnMs = 0;
+    minion.slowMs = 0;
+    minion.stunMs = 0;
+    minion.defenseBreak = 0;
+    minion.touchCooldown = 0;
+    minion.bossTier = 0;
+    minion.splitDepth = 0;
     minion.setCircle(8);
   }
 
@@ -684,10 +784,19 @@ class DungeonScene extends Phaser.Scene {
     let damage = projectile.damage;
     if (projectile.attribute === enemy.weakness) damage *= 1.5;
     if (projectile.attribute === enemy.resistance) damage *= 0.5;
+    damage *= 1 + enemy.defenseBreak;
     if (projectile.attribute === "Poison") damage *= 1.05 + this.run.player.stats.A * 0.01;
     if (projectile.attribute === "Fire") damage += 2 + this.run.player.stats.A * 0.2;
-    if (projectile.attribute === "Thunder" && Math.random() < 0.15) enemy.fireCooldown += 250;
+    if (projectile.attribute === "Thunder" && Math.random() < 0.15) enemy.stunMs = Math.max(enemy.stunMs, 250 + this.run.player.stats.A * 20);
     if (Math.random() < this.run.player.stats.T * 0.015) damage *= 1.7;
+
+    if (projectile.attribute === "Fire") {
+      enemy.burnMs = Math.max(enemy.burnMs, 2800 + this.run.player.stats.A * 70);
+    } else if (projectile.attribute === "Ice") {
+      enemy.slowMs = Math.max(enemy.slowMs, 2600 + this.run.player.stats.A * 60);
+    } else if (projectile.attribute === "Poison") {
+      enemy.defenseBreak = Math.min(0.5, enemy.defenseBreak + 0.08);
+    }
 
     enemy.hp -= damage;
     projectile.piercing -= 1;
@@ -751,7 +860,7 @@ class DungeonScene extends Phaser.Scene {
         return;
       }
     }
-    if (enemy.kind === "splitter" && enemy.scaleX >= 1) {
+    if (enemy.kind === "splitter" && enemy.splitDepth < 2) {
       this.spawnMinion(enemy);
       this.spawnMinion(enemy);
     }
@@ -787,8 +896,35 @@ class DungeonScene extends Phaser.Scene {
     if (!projectile.active) {
       return;
     }
-    this.run.player.hp -= projectile.damage * (1 - this.run.player.stats.V * 0.01);
+    this.damagePlayer(projectile.damage, projectile.attribute);
     projectile.destroy();
+  }
+
+  private onPlayerTouchesEnemy(_: Phaser.GameObjects.GameObject, enemyObj: Phaser.GameObjects.GameObject): void {
+    const enemy = enemyObj as EnemySprite;
+    if (!enemy.active || enemy.touchCooldown > 0) {
+      return;
+    }
+    enemy.touchCooldown = 700;
+    this.damagePlayer(6 + this.run.floor * 0.25 + enemy.bossTier * 2, enemy.attribute);
+    const knockback = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize().scale(200);
+    this.player.setVelocity(knockback.x, knockback.y);
+  }
+
+  private damagePlayer(amount: number, attribute: Attribute): void {
+    const vitalityReduction = 1 - this.run.player.stats.V * 0.01;
+    const poisonPenalty = 1 + this.run.player.defenseBreak;
+    this.run.player.hp -= amount * vitalityReduction * poisonPenalty;
+    if (attribute === "Fire") {
+      this.run.player.burnMs = Math.max(this.run.player.burnMs, 2500);
+    } else if (attribute === "Ice") {
+      this.run.player.iceMs = Math.max(this.run.player.iceMs, 2000);
+    } else if (attribute === "Thunder") {
+      this.run.player.thunderMs = Math.max(this.run.player.thunderMs, 240);
+    } else if (attribute === "Poison") {
+      this.run.player.poisonMs = Math.max(this.run.player.poisonMs, 3200);
+      this.run.player.defenseBreak = Math.min(0.35, this.run.player.defenseBreak + 0.07);
+    }
     if (this.run.player.hp <= 0) {
       this.scene.launch("GameOverScene");
       this.scene.pause();
@@ -804,10 +940,64 @@ class DungeonScene extends Phaser.Scene {
 
   private onReachStairs(): void {
     if (!this.stairs.visible) {
+      this.showMessage("ボスを倒すまで階段は開かない");
       return;
     }
     this.run.floor += 1;
     this.scene.restart(this.run);
+  }
+
+  private updatePlayerStatus(delta: number): void {
+    if (this.run.player.thunderMs > 0) {
+      this.run.player.thunderMs -= delta;
+      this.player.setVelocity(0, 0);
+      return;
+    }
+
+    this.passiveTickMs += delta;
+    this.run.player.burnMs = Math.max(0, this.run.player.burnMs - delta);
+    this.run.player.iceMs = Math.max(0, this.run.player.iceMs - delta);
+    this.run.player.poisonMs = Math.max(0, this.run.player.poisonMs - delta);
+
+    if (this.run.player.poisonMs <= 0) {
+      this.run.player.defenseBreak = Math.max(0, this.run.player.defenseBreak - 0.005);
+    }
+
+    if (this.passiveTickMs >= 500) {
+      this.passiveTickMs = 0;
+      if (this.run.player.burnMs > 0) {
+        this.run.player.hp -= 2.5;
+      }
+      if (this.run.player.poisonMs > 0) {
+        this.run.player.hp -= 1.2;
+      }
+      const regen = 0.18 + this.run.player.stats.V * 0.03;
+      if (this.run.player.burnMs <= 0) {
+        this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + regen);
+      }
+      if (this.run.player.hp <= 0) {
+        this.scene.launch("GameOverScene");
+        this.scene.pause();
+      }
+    }
+  }
+
+  private tickEnemyStatus(enemy: EnemySprite, delta: number): void {
+    enemy.burnMs = Math.max(0, enemy.burnMs - delta);
+    enemy.slowMs = Math.max(0, enemy.slowMs - delta);
+    enemy.stunMs = Math.max(0, enemy.stunMs - delta);
+    if (enemy.burnMs > 0 && Phaser.Math.Between(0, 100) < 10) {
+      enemy.hp -= 0.6 + this.run.player.stats.A * 0.05;
+      if (enemy.hp <= 0) {
+        this.killEnemy(enemy);
+      }
+    }
+  }
+
+  private getBossPhaseMultiplier(enemy: EnemySprite): number {
+    const ratio = enemy.hp / enemy.maxHp;
+    this.bossPhase = ratio > 0.6 ? 1 : ratio > 0.3 ? 2 : 3;
+    return this.bossPhase === 1 ? 1 : this.bossPhase === 2 ? 1.18 : 1.35;
   }
 
   private updateFog(): void {
@@ -862,6 +1052,18 @@ class DungeonScene extends Phaser.Scene {
     this.xpText.setText(`LV ${this.run.player.level}  XP ${Math.floor(this.run.player.xp)} / ${this.run.player.nextXp}  SP ${this.run.player.statPoints}`);
     this.floorText.setText(`F ${this.run.floor}`);
     this.wandText.setText(`${this.run.player.wand.name}  ${this.run.player.wand.rarity}\n${this.run.player.wand.specialEffects.join(", ") || "No Special"}`);
+    const statuses: string[] = [];
+    if (this.run.player.burnMs > 0) statuses.push("Burn");
+    if (this.run.player.iceMs > 0) statuses.push("Slow");
+    if (this.run.player.thunderMs > 0) statuses.push("Stun");
+    if (this.run.player.poisonMs > 0) statuses.push("Poison");
+    if (this.layout.bossRoomId !== undefined) {
+      const boss = (this.enemies.getChildren() as EnemySprite[]).find((enemy) => enemy.active && enemy.roomId === this.layout.bossRoomId);
+      if (boss) {
+        statuses.push(`Boss HP ${Math.ceil(boss.hp)}/${Math.ceil(boss.maxHp)} P${this.bossPhase}`);
+      }
+    }
+    this.statusText.setText(statuses.join("  ") || "Status: Normal");
   }
 
   private isWalkable(x: number, y: number): boolean {
@@ -878,6 +1080,30 @@ class DungeonScene extends Phaser.Scene {
         ty >= room.y &&
         ty <= room.y + room.height
     );
+  }
+
+  private updateTransientUi(delta: number): void {
+    if (this.roomTitleText) {
+      this.roomTitleTimer -= delta;
+      this.roomTitleText.setAlpha(Math.min(1, this.roomTitleTimer / 600));
+      if (this.roomTitleTimer <= 0) {
+        this.roomTitleText.destroy();
+        this.roomTitleText = undefined;
+      }
+    }
+
+    if (this.messageText.text) {
+      this.messageText.setAlpha(Math.max(0, this.messageText.alpha - delta / 1800));
+      if (this.messageText.alpha <= 0.05) {
+        this.messageText.setText("");
+        this.messageText.setAlpha(1);
+      }
+    }
+  }
+
+  private showMessage(message: string): void {
+    this.messageText.setText(message);
+    this.messageText.setAlpha(1);
   }
 }
 
@@ -901,19 +1127,7 @@ function attributeColor(attribute: Attribute): number {
 }
 
 function bossName(floor: number): string {
-  const names: Record<number, string> = {
-    10: "炎の魔獣",
-    20: "氷の巨人",
-    30: "雷の鳥",
-    40: "毒の蜘蛛",
-    50: "無属性の騎士",
-    60: "炎氷の双子",
-    70: "雷の魔導士",
-    80: "毒の樹",
-    90: "虚無の影",
-    100: "深淵の王"
-  };
-  return names[floor] ?? "深層の守護者";
+  return BOSS_PROFILES[floor]?.name ?? "深層の守護者";
 }
 
 export function createGame(container: string): Phaser.Game {
