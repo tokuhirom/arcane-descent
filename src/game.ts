@@ -98,6 +98,12 @@ interface LootSprite extends Phaser.Physics.Arcade.Image {
   armor: Armor;
 }
 
+type PotionType = "hp" | "shield" | "power" | "speed";
+
+interface PotionSprite extends Phaser.Physics.Arcade.Image {
+  potionType: PotionType;
+}
+
 interface BossProfile {
   name: string;
   attribute: Attribute;
@@ -129,7 +135,7 @@ const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   V: "最大HP+5, 被ダメ軽減, 撃破時回復UP",
   F: "良質な武器の出現率UP",
   A: "属性攻撃・継続ダメージ強化",
-  S: "移動速度・攻撃速度UP",
+  S: "移動・攻撃・弾速UP",
   T: "クリティカル率UP"
 };
 const BOSS_PROFILES: Record<number, BossProfile> = {
@@ -185,7 +191,9 @@ function createStarterState(): RunState {
       thunderMs: 0,
       poisonMs: 0,
       defenseBreak: 0,
-      hitInvulnMs: 0
+      hitInvulnMs: 0,
+      powerBoostMs: 0,
+      speedBoostMs: 0
     }
   };
 }
@@ -211,6 +219,8 @@ function loadRun(): RunState | null {
     run.player.poisonMs = 0;
     run.player.defenseBreak = 0;
     run.player.hitInvulnMs = 0;
+    run.player.powerBoostMs = 0;
+    run.player.speedBoostMs = 0;
     return run;
   } catch {
     return null;
@@ -380,6 +390,26 @@ class BootScene extends Phaser.Scene {
     g.fillStyle(0x9d4edd, 1);
     g.fillRect(4, 4, 10, 10);
     g.generateTexture("armor-drop", 18, 18);
+    g.clear();
+
+    g.fillStyle(0xff4444, 1);
+    g.fillCircle(6, 6, 5);
+    g.generateTexture("potion-hp", 12, 12);
+    g.clear();
+
+    g.fillStyle(0x4488ff, 1);
+    g.fillCircle(6, 6, 5);
+    g.generateTexture("potion-shield", 12, 12);
+    g.clear();
+
+    g.fillStyle(0xffdd44, 1);
+    g.fillCircle(6, 6, 5);
+    g.generateTexture("potion-power", 12, 12);
+    g.clear();
+
+    g.fillStyle(0x44dd66, 1);
+    g.fillCircle(6, 6, 5);
+    g.generateTexture("potion-speed", 12, 12);
     g.destroy();
 
     this.scene.start("TitleScene");
@@ -736,6 +766,7 @@ class DungeonScene extends Phaser.Scene {
   private bossDoors!: Phaser.Physics.Arcade.StaticGroup;
   private hazards!: Phaser.Physics.Arcade.Group;
   private icePillars!: Phaser.Physics.Arcade.StaticGroup;
+  private potions!: Phaser.Physics.Arcade.Group;
   private stairs!: Phaser.Physics.Arcade.Image;
   private fireTimer = 0;
   private fog: FogState[][] = [];
@@ -788,6 +819,7 @@ class DungeonScene extends Phaser.Scene {
     this.bossDoors = this.physics.add.staticGroup();
     this.hazards = this.physics.add.group();
     this.icePillars = this.physics.add.staticGroup();
+    this.potions = this.physics.add.group();
 
     this.layout = generateDungeon(this.run.floor);
     this.fog = Array.from({ length: this.layout.height }, () =>
@@ -841,6 +873,7 @@ class DungeonScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.armorDrops, safeCallback(this.onCollectArmorDrop), undefined, this);
     this.physics.add.overlap(this.player, this.stairs, safeCallback(this.onReachStairs), undefined, this);
     this.physics.add.overlap(this.player, this.hazards, safeCallback(this.onPlayerTouchesHazard), undefined, this);
+    this.physics.add.overlap(this.player, this.potions, safeCallback(this.onCollectPotion), undefined, this);
     this.physics.add.collider(this.player, this.icePillars);
     this.physics.add.collider(this.enemies, this.icePillars);
 
@@ -1200,6 +1233,9 @@ class DungeonScene extends Phaser.Scene {
     if (this.run.player.armor.specialEffect === "Speed") {
       speedMultiplier *= 1.15;
     }
+    if (this.run.player.speedBoostMs > 0) {
+      speedMultiplier *= 1.5;
+    }
     if (movement.lengthSq() > 0) {
       movement.normalize().scale((BASE_SPEED + this.run.player.stats.S * 10) * speedMultiplier);
     }
@@ -1335,7 +1371,7 @@ class DungeonScene extends Phaser.Scene {
       const spread = shots === 1 ? 0 : Phaser.Math.DegToRad((i - 1) * 12);
       const projectile = this.projectiles.create(this.player.x, this.player.y, "projectile") as ProjectileSprite;
       projectile.owner = "player";
-      projectile.damage = this.run.player.wand.stats.damage * (1 + this.run.player.stats.P * 0.08);
+      projectile.damage = this.run.player.wand.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 2 : 1);
       projectile.piercing = this.run.player.wand.stats.piercing;
       projectile.attribute = this.run.player.wand.attribute;
       projectile.specialEffects = [...effects];
@@ -1346,7 +1382,7 @@ class DungeonScene extends Phaser.Scene {
       if (projectile.body) {
         this.physics.velocityFromRotation(
           baseAngle + spread,
-          this.run.player.wand.stats.projectileSpeed,
+          this.run.player.wand.stats.projectileSpeed + this.run.player.stats.S * 8,
           (projectile.body as Phaser.Physics.Arcade.Body).velocity
         );
       }
@@ -1741,6 +1777,9 @@ class DungeonScene extends Phaser.Scene {
     if (Math.random() < 0.12) {
       this.spawnArmorDrop(enemy.x + 10, enemy.y, createRandomArmor(this.run.floor + this.run.player.stats.F));
     }
+    if (Math.random() < 0.20) {
+      this.spawnPotion(enemy.x, enemy.y);
+    }
     if (this.run.player.armor.specialEffect === "Regen") {
       this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + 0.5);
     }
@@ -1812,6 +1851,7 @@ class DungeonScene extends Phaser.Scene {
           }
         },
         onClose: () => {
+          this.run.player.hitInvulnMs = 500;
           this.scene.resume();
         }
       });
@@ -2137,6 +2177,14 @@ class DungeonScene extends Phaser.Scene {
       return true;
     });
 
+    this.potions.children.iterate((child) => {
+      if (child) {
+        const img = child as Phaser.Physics.Arcade.Image;
+        img.setVisible(fogAt(img.x, img.y) > 0);
+      }
+      return true;
+    });
+
     this.enemies.children.iterate((child) => {
       if (child) {
         const enemy = child as EnemySprite;
@@ -2168,6 +2216,20 @@ class DungeonScene extends Phaser.Scene {
         this.minimapGraphics.fillRect(x0 + x * cell / 2.5, y0 + y * cell / 2.5, dotSize, dotSize);
       }
     }
+
+    // 階段位置をミニマップに表示（一度発見済みなら）
+    const stairsTx = Math.floor(this.stairs.x / TILE_SIZE);
+    const stairsTy = Math.floor(this.stairs.y / TILE_SIZE);
+    if (this.fog[stairsTy]?.[stairsTx] > 0 && this.stairs.visible) {
+      this.minimapGraphics.fillStyle(0x9d4edd, 1);
+      this.minimapGraphics.fillRect(x0 + stairsTx * cell / 2.5 - 1, y0 + stairsTy * cell / 2.5 - 1, 4, 4);
+    }
+
+    // プレイヤー位置
+    const playerTx = Math.floor(this.player.x / TILE_SIZE);
+    const playerTy = Math.floor(this.player.y / TILE_SIZE);
+    this.minimapGraphics.fillStyle(0x8e7cf6, 1);
+    this.minimapGraphics.fillRect(x0 + playerTx * cell / 2.5 - 1, y0 + playerTy * cell / 2.5 - 1, 4, 4);
   }
 
   private syncUi(): void {
@@ -2189,6 +2251,8 @@ class DungeonScene extends Phaser.Scene {
     if (this.run.player.thunderMs > 0) statuses.push("Stun");
     if (this.run.player.poisonMs > 0) statuses.push("Poison");
     if (this.run.player.hitInvulnMs > 0) statuses.push("Guard");
+    if (this.run.player.powerBoostMs > 0) statuses.push("Power!");
+    if (this.run.player.speedBoostMs > 0) statuses.push("Speed!");
     if (this.layout.bossRoomId !== undefined) {
       const boss = (this.enemies.getChildren() as EnemySprite[]).find((enemy) => enemy.active && enemy.roomId === this.layout.bossRoomId);
       if (boss) {
@@ -2264,6 +2328,47 @@ class DungeonScene extends Phaser.Scene {
     drop.setTint(attributeColor(armor.attribute));
     drop.setScale(1 + rarityValue(armor.rarity) * 0.06);
     drop.setDepth(2);
+  }
+
+  private spawnPotion(x: number, y: number): void {
+    const types: PotionType[] = ["hp", "shield", "power", "speed"];
+    const potionType = pick(types);
+    const textureMap: Record<PotionType, string> = {
+      hp: "potion-hp",
+      shield: "potion-shield",
+      power: "potion-power",
+      speed: "potion-speed",
+    };
+    const potion = this.potions.create(x, y, textureMap[potionType]) as PotionSprite;
+    potion.potionType = potionType;
+    potion.setDepth(2);
+  }
+
+  private onCollectPotion(_: Phaser.GameObjects.GameObject, potionObj: Phaser.GameObjects.GameObject): void {
+    const potion = potionObj as PotionSprite;
+    if (!potion.active) return;
+    sfx.play("pickup");
+    switch (potion.potionType) {
+      case "hp": {
+        const amount = 15 + this.run.floor;
+        this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + amount);
+        this.showMessage(`HP Potion: +${amount} HP`);
+        break;
+      }
+      case "shield":
+        this.run.player.hitInvulnMs = 3000;
+        this.showMessage("Shield Potion: 3秒無敵");
+        break;
+      case "power":
+        this.run.player.powerBoostMs = 8000;
+        this.showMessage("Power Potion: 8秒攻撃力2倍");
+        break;
+      case "speed":
+        this.run.player.speedBoostMs = 8000;
+        this.showMessage("Speed Potion: 8秒移動速度UP");
+        break;
+    }
+    potion.destroy();
   }
 
   private onCollectArmorDrop(_: Phaser.GameObjects.GameObject, armorObj: Phaser.GameObjects.GameObject): void {

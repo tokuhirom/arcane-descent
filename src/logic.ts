@@ -16,6 +16,8 @@ export interface PlayerState {
   poisonMs: number;
   defenseBreak: number;
   hitInvulnMs: number;
+  powerBoostMs: number;
+  speedBoostMs: number;
 }
 
 export function computeDamageReduction(vitalityStat: number, defenseBreak: number): { vitalityReduction: number; poisonPenalty: number } {
@@ -76,6 +78,8 @@ export function updatePlayerTimers(player: PlayerState, delta: number): void {
   if (player.poisonMs <= 0) {
     player.defenseBreak = Math.max(0, player.defenseBreak - 0.005);
   }
+  player.powerBoostMs = Math.max(0, player.powerBoostMs - delta);
+  player.speedBoostMs = Math.max(0, player.speedBoostMs - delta);
 }
 
 export function applyPassiveTick(player: PlayerState): TickResult {
@@ -128,5 +132,7 @@ export function createDefaultPlayer(): PlayerState {
     poisonMs: 0,
     defenseBreak: 0,
     hitInvulnMs: 0,
+    powerBoostMs: 0,
+    speedBoostMs: 0,
   };
 }
