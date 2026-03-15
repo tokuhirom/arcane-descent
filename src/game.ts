@@ -593,12 +593,23 @@ class DungeonScene extends Phaser.Scene {
     this.cameras.main.setZoom(1.1);
     this.physics.world.setBounds(0, 0, this.layout.width * TILE_SIZE, this.layout.height * TILE_SIZE);
 
-    this.physics.add.overlap(this.projectiles, this.enemies, this.onProjectileHitsEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
-    this.physics.add.overlap(this.enemyProjectiles, this.player, this.onEnemyProjectileHitsPlayer as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
-    this.physics.add.overlap(this.player, this.enemies, this.onPlayerTouchesEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
-    this.physics.add.overlap(this.player, this.chests, this.onLootChest as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
-    this.physics.add.overlap(this.player, this.lootDrops, this.onCollectLoot as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
-    this.physics.add.overlap(this.player, this.stairs, this.onReachStairs as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
+    const safeCallback = (fn: (...args: Phaser.GameObjects.GameObject[]) => void): Phaser.Types.Physics.Arcade.ArcadePhysicsCallback => {
+      return ((...args: Phaser.GameObjects.GameObject[]) => {
+        try {
+          fn.apply(this, args);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("Physics callback error:", err);
+          this.showMessage(`ERROR: ${msg}`);
+        }
+      }) as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback;
+    };
+    this.physics.add.overlap(this.projectiles, this.enemies, safeCallback(this.onProjectileHitsEnemy), undefined, this);
+    this.physics.add.overlap(this.enemyProjectiles, this.player, safeCallback(this.onEnemyProjectileHitsPlayer), undefined, this);
+    this.physics.add.overlap(this.player, this.enemies, safeCallback(this.onPlayerTouchesEnemy), undefined, this);
+    this.physics.add.overlap(this.player, this.chests, safeCallback(this.onLootChest), undefined, this);
+    this.physics.add.overlap(this.player, this.lootDrops, safeCallback(this.onCollectLoot), undefined, this);
+    this.physics.add.overlap(this.player, this.stairs, safeCallback(this.onReachStairs), undefined, this);
 
     if (this.run.floor % 10 === 0) {
       this.scene.launch("BossIntroScene", { floor: this.run.floor });
