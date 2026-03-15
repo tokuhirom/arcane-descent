@@ -113,7 +113,7 @@ const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   P: "攻撃力UP",
   I: "視界・ミニマップ精度UP",
   V: "最大HP+5, 被ダメ軽減, 自然回復UP",
-  F: "拾える武器が強くなる",
+  F: "良質な武器の出現率UP",
   A: "属性攻撃・継続ダメージ強化",
   S: "移動速度・攻撃速度UP",
   T: "クリティカル率UP"
