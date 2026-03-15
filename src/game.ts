@@ -139,16 +139,16 @@ const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   T: "クリティカル率UP"
 };
 const BOSS_PROFILES: Record<number, BossProfile> = {
-  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 12, speedMultiplier: 1.25, fireCooldown: 1200 },
-  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 14, speedMultiplier: 0.85, fireCooldown: 1000 },
-  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 13, speedMultiplier: 1.6, fireCooldown: 700 },
-  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 15, speedMultiplier: 1.05, fireCooldown: 1100 },
-  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 16, speedMultiplier: 1.1, fireCooldown: 820 },
-  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 14, speedMultiplier: 1.2, fireCooldown: 900 },
-  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 17, speedMultiplier: 1.3, fireCooldown: 620 },
-  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 20, speedMultiplier: 0.4, fireCooldown: 950 },
-  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 18, speedMultiplier: 1.5, fireCooldown: 760 },
-  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 25, speedMultiplier: 1.25, fireCooldown: 650 }
+  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 80, speedMultiplier: 1.25, fireCooldown: 1200 },
+  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 100, speedMultiplier: 0.85, fireCooldown: 1000 },
+  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 90, speedMultiplier: 1.6, fireCooldown: 700 },
+  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 110, speedMultiplier: 1.05, fireCooldown: 1100 },
+  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 120, speedMultiplier: 1.1, fireCooldown: 820 },
+  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 100, speedMultiplier: 1.2, fireCooldown: 900 },
+  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 130, speedMultiplier: 1.3, fireCooldown: 620 },
+  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 150, speedMultiplier: 0.4, fireCooldown: 950 },
+  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 140, speedMultiplier: 1.5, fireCooldown: 760 },
+  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 200, speedMultiplier: 1.25, fireCooldown: 650 }
 };
 
 const sfx = new SfxManager();
@@ -1016,6 +1016,7 @@ class DungeonScene extends Phaser.Scene {
       if (bossProfile) {
         enemy.setScale(1.7);
         enemy.setTint(attributeColor(enemy.attribute));
+        console.log(`BOSS SPAWN: ${bossProfile.name} HP=${enemy.hp} maxHP=${enemy.maxHp} floor=${this.run.floor}`);
       }
       if (this.run.floor === 80 && bossProfile) {
         enemy.speed = 0;
@@ -1790,8 +1791,8 @@ class DungeonScene extends Phaser.Scene {
       this.bossDoors.clear(true, true);
       this.stairs.setData("unlocked", true);
       this.stairs.setVisible(true);
-      this.spawnWandDrop(enemy.x + 18, enemy.y, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
-      this.spawnArmorDrop(enemy.x - 18, enemy.y, createRandomArmor(this.run.floor + 8 + this.run.player.stats.F));
+      this.spawnWandDrop(enemy.x + 48, enemy.y - 36, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
+      this.spawnArmorDrop(enemy.x - 48, enemy.y - 36, createRandomArmor(this.run.floor + 8 + this.run.player.stats.F));
       this.showMessage("ボス撃破、階段が現れた");
       if (this.run.floor === 100) {
         deleteSave();
