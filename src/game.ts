@@ -564,22 +564,22 @@ class ArmorCompareScene extends Phaser.Scene {
 
   create(data: { current: Armor; found: Armor; onEquip: () => void; onSkip: () => void }): void {
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 340, 0x0f1020, 0.94)
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 420, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
 
     const cx = panel.x - 200;
-    const cy = panel.y - 140;
+    const topY = panel.y - 190;
 
-    makeText(this, cx, cy, "防具比較", 24, "#f8f1ff");
+    makeText(this, cx, topY, "防具比較", 24, "#f8f1ff");
 
     const effectLabel = (effect: ArmorEffect | null): string => {
-      if (!effect) return "-";
+      if (!effect) return "効果なし";
       const labels: Record<ArmorEffect, string> = {
-        Thorns: "Thorns: 接触時に敵へ3ダメージ",
-        Dodge: "Dodge: 12%で回避",
-        Reflect: "Reflect: 8%で弾反射",
-        Regen: "Regen: 撃破時+0.5HP",
-        Speed: "Speed: 移動速度+15%"
+        Thorns: "棘: 接触時に敵へ3ダメージ",
+        Dodge: "回避: 12%でダメージ無効",
+        Reflect: "反射: 8%で弾を跳ね返す",
+        Regen: "再生: 撃破時+0.5HP",
+        Speed: "俊足: 移動速度+15%"
       };
       return labels[effect];
     };
@@ -587,24 +587,24 @@ class ArmorCompareScene extends Phaser.Scene {
     const drawArmor = (armor: Armor, x: number, y: number, label: string, highlight: boolean) => {
       const color = highlight ? "#f4d35e" : "#cdb4db";
       makeText(this, x, y, label, 16, color);
-      makeText(this, x, y + 22, `${armor.name}`, 18, "#f8f1ff");
-      makeText(this, x, y + 46, `${armor.rarity}  耐性: ${armor.attribute}`, 14, "#cdb4db");
-      makeText(this, x, y + 66, `防御 ${armor.defense.toFixed(1)}`, 14, "#9ad1ff");
-      makeText(this, x, y + 86, effectLabel(armor.specialEffect), 13, "#80ed99");
+      makeText(this, x, y + 20, armor.name, 17, "#f8f1ff");
+      makeText(this, x, y + 40, `${armor.rarity}  耐性: ${armor.attribute}  防御 ${armor.defense.toFixed(1)}`, 13, "#9ad1ff");
+      makeText(this, x, y + 58, effectLabel(armor.specialEffect), 13, "#80ed99");
     };
 
-    drawArmor(data.current, cx, cy + 32, "装備中", false);
-    drawArmor(data.found, cx, cy + 150, "発見!", true);
+    drawArmor(data.current, cx, topY + 34, "装備中", false);
+    drawArmor(data.found, cx, topY + 130, "発見!", true);
 
-    const equipBtn = this.add.rectangle(panel.x - 70, panel.y + 112, 140, 40, 0x3a254f, 1)
+    const btnY = panel.y + 165;
+    const equipBtn = this.add.rectangle(panel.x - 70, btnY, 140, 40, 0x3a254f, 1)
       .setInteractive({ useHandCursor: true })
       .setStrokeStyle(1, 0xf4d35e);
-    makeText(this, panel.x - 115, panel.y + 100, "装備する", 20, "#f4d35e");
+    makeText(this, panel.x - 115, btnY - 12, "装備する", 20, "#f4d35e");
 
-    const skipBtn = this.add.rectangle(panel.x + 80, panel.y + 112, 140, 40, 0x241734, 1)
+    const skipBtn = this.add.rectangle(panel.x + 80, btnY, 140, 40, 0x241734, 1)
       .setInteractive({ useHandCursor: true })
       .setStrokeStyle(1, 0x9d4edd);
-    makeText(this, panel.x + 35, panel.y + 100, "捨てる", 20, "#cdb4db");
+    makeText(this, panel.x + 35, btnY - 12, "捨てる", 20, "#cdb4db");
 
     const equip = () => { this.scene.stop(); data.onEquip(); };
     const skip = () => { this.scene.stop(); data.onSkip(); };
