@@ -377,6 +377,55 @@ class StairsConfirmScene extends Phaser.Scene {
   }
 }
 
+class WandCompareScene extends Phaser.Scene {
+  constructor() {
+    super("WandCompareScene");
+  }
+
+  create(data: { current: Wand; found: Wand; onEquip: () => void; onSkip: () => void }): void {
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6)
+      .setInteractive();
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 340, 0x0f1020, 0.94)
+      .setStrokeStyle(2, 0x9d4edd);
+
+    const cx = panel.x - 200;
+    const cy = panel.y - 140;
+
+    makeText(this, cx, cy, "ワンド比較", 24, "#f8f1ff");
+
+    const drawWand = (wand: Wand, x: number, y: number, label: string, highlight: boolean) => {
+      const color = highlight ? "#f4d35e" : "#cdb4db";
+      makeText(this, x, y, label, 16, color);
+      makeText(this, x, y + 22, `${wand.name}`, 18, "#f8f1ff");
+      makeText(this, x, y + 46, `${wand.rarity}  ${wand.attribute}`, 14, "#cdb4db");
+      makeText(this, x, y + 66, `ATK ${wand.stats.damage.toFixed(1)}  SPD ${wand.stats.fireRate}  PRC ${wand.stats.piercing}`, 14, "#9ad1ff");
+      const fx = wand.specialEffects.length > 0 ? wand.specialEffects.join(", ") : "-";
+      makeText(this, x, y + 86, fx, 13, "#80ed99");
+    };
+
+    drawWand(data.current, cx, cy + 36, "装備中", false);
+    drawWand(data.found, cx, cy + 150, "発見!", true);
+
+    const equipBtn = this.add.rectangle(panel.x - 70, panel.y + 130, 140, 40, 0x3a254f, 1)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(1, 0xf4d35e);
+    makeText(this, panel.x - 115, panel.y + 118, "装備する", 20, "#f4d35e");
+
+    const skipBtn = this.add.rectangle(panel.x + 80, panel.y + 130, 140, 40, 0x241734, 1)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(1, 0x9d4edd);
+    makeText(this, panel.x + 35, panel.y + 118, "捨てる", 20, "#cdb4db");
+
+    const equip = () => { this.scene.stop(); data.onEquip(); };
+    const skip = () => { this.scene.stop(); data.onSkip(); };
+
+    equipBtn.on("pointerdown", equip);
+    skipBtn.on("pointerdown", skip);
+    this.input.keyboard?.once("keydown-SPACE", equip);
+    this.input.keyboard?.once("keydown-ESC", skip);
+  }
+}
+
 class LevelUpScene extends Phaser.Scene {
   constructor() {
     super("LevelUpScene");
@@ -1367,12 +1416,26 @@ class DungeonScene extends Phaser.Scene {
 
   private onCollectLoot(_: Phaser.GameObjects.GameObject, lootObject: Phaser.GameObjects.GameObject): void {
     const loot = lootObject as LootSprite;
-    if (!loot.active) {
+    if (!loot.active || this.scene.isActive("WandCompareScene")) {
       return;
     }
-    this.run.player.wand = loot.wand;
-    this.showMessage(`${loot.wand.rarity} ${loot.wand.name}`);
-    loot.destroy();
+    loot.disableBody(true, false);
+    this.scene.pause();
+    this.scene.launch("WandCompareScene", {
+      current: this.run.player.wand,
+      found: loot.wand,
+      onEquip: () => {
+        this.run.player.wand = loot.wand;
+        this.showMessage(`${loot.wand.rarity} ${loot.wand.name} を装備した`);
+        loot.destroy();
+        this.scene.resume();
+      },
+      onSkip: () => {
+        this.showMessage(`${loot.wand.name} を捨てた`);
+        loot.destroy();
+        this.scene.resume();
+      }
+    });
   }
 
   private onReachStairs(): void {
@@ -1649,7 +1712,7 @@ export function createGame(container: string): Phaser.Game {
         debug: false
       }
     },
-    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, GameOverScene, EndingScene],
+    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, WandCompareScene, GameOverScene, EndingScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
