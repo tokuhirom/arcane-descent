@@ -139,16 +139,16 @@ const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   T: "クリティカル率UP"
 };
 const BOSS_PROFILES: Record<number, BossProfile> = {
-  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 80, speedMultiplier: 1.25, fireCooldown: 1200 },
-  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 100, speedMultiplier: 0.85, fireCooldown: 1000 },
-  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 90, speedMultiplier: 1.6, fireCooldown: 700 },
-  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 110, speedMultiplier: 1.05, fireCooldown: 1100 },
-  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 120, speedMultiplier: 1.1, fireCooldown: 820 },
-  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 100, speedMultiplier: 1.2, fireCooldown: 900 },
-  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 130, speedMultiplier: 1.3, fireCooldown: 620 },
-  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 150, speedMultiplier: 0.4, fireCooldown: 950 },
-  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 140, speedMultiplier: 1.5, fireCooldown: 760 },
-  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 200, speedMultiplier: 1.25, fireCooldown: 650 }
+  10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 40, speedMultiplier: 1.25, fireCooldown: 1200 },
+  20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 80, speedMultiplier: 0.85, fireCooldown: 1000 },
+  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 140, speedMultiplier: 1.6, fireCooldown: 700 },
+  40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 200, speedMultiplier: 1.05, fireCooldown: 1100 },
+  50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 250, speedMultiplier: 1.1, fireCooldown: 820 },
+  60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 280, speedMultiplier: 1.2, fireCooldown: 900 },
+  70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 310, speedMultiplier: 1.3, fireCooldown: 620 },
+  80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 350, speedMultiplier: 0.4, fireCooldown: 950 },
+  90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 340, speedMultiplier: 1.5, fireCooldown: 760 },
+  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 450, speedMultiplier: 1.25, fireCooldown: 650 }
 };
 
 const sfx = new SfxManager();
@@ -1372,7 +1372,7 @@ class DungeonScene extends Phaser.Scene {
       const spread = shots === 1 ? 0 : Phaser.Math.DegToRad((i - 1) * 12);
       const projectile = this.projectiles.create(this.player.x, this.player.y, "projectile") as ProjectileSprite;
       projectile.owner = "player";
-      projectile.damage = this.run.player.wand.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 2 : 1);
+      projectile.damage = this.run.player.wand.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 1.5 : 1);
       projectile.piercing = this.run.player.wand.stats.piercing;
       projectile.attribute = this.run.player.wand.attribute;
       projectile.specialEffects = [...effects];
