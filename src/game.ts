@@ -954,7 +954,7 @@ class DungeonScene extends Phaser.Scene {
     }
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.joystickPointer) {
+      if (this.scene.isPaused() || this.joystickPointer) {
         return;
       }
       this.joystickPointer = pointer;
@@ -963,7 +963,7 @@ class DungeonScene extends Phaser.Scene {
       this.joystickThumb?.setPosition(pointer.x, pointer.y).setVisible(true);
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!pointer.isDown || pointer !== this.joystickPointer) {
+      if (this.scene.isPaused() || !pointer.isDown || pointer !== this.joystickPointer) {
         return;
       }
       this.updateJoystick(pointer);
