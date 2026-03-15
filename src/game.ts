@@ -622,32 +622,26 @@ class DungeonScene extends Phaser.Scene {
     this.pauseButton.on("pointerdown", () => {
       this.scene.isPaused() ? this.scene.resume() : this.scene.pause();
     });
-    if (!this.usingTouchControls) {
-      this.joystickBase?.setVisible(false);
-      this.joystickThumb?.setVisible(false);
-    }
     this.syncUi();
   }
 
+  private joystickOrigin = new Phaser.Math.Vector2();
+
   private createJoystick(): void {
-    this.joystickBase = this.add.circle(GAME_WIDTH - 92, GAME_HEIGHT - 110, 44, 0x3a254f, 0.4).setScrollFactor(0);
-    this.joystickThumb = this.add.circle(GAME_WIDTH - 92, GAME_HEIGHT - 110, 18, 0xcdb4db, 0.6).setScrollFactor(0);
+    this.joystickBase = this.add.circle(0, 0, 44, 0x3a254f, 0.4).setScrollFactor(0).setVisible(false).setDepth(20);
+    this.joystickThumb = this.add.circle(0, 0, 18, 0xcdb4db, 0.6).setScrollFactor(0).setVisible(false).setDepth(20);
     if (!this.usingTouchControls) {
-      this.joystickBase.setVisible(false);
-      this.joystickThumb.setVisible(false);
       return;
     }
-    const center = new Phaser.Math.Vector2(GAME_WIDTH - 92, GAME_HEIGHT - 110);
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.joystickPointer) {
         return;
       }
-      if (Phaser.Math.Distance.Between(pointer.x, pointer.y, center.x, center.y) > 88) {
-        return;
-      }
       this.joystickPointer = pointer;
-      this.updateJoystick(pointer);
+      this.joystickOrigin.set(pointer.x, pointer.y);
+      this.joystickBase?.setPosition(pointer.x, pointer.y).setVisible(true);
+      this.joystickThumb?.setPosition(pointer.x, pointer.y).setVisible(true);
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       if (!pointer.isDown || pointer !== this.joystickPointer) {
@@ -661,18 +655,18 @@ class DungeonScene extends Phaser.Scene {
       }
       this.joystickPointer = undefined;
       this.joystickVector.set(0, 0);
-      this.joystickThumb?.setPosition(center.x, center.y);
+      this.joystickBase?.setVisible(false);
+      this.joystickThumb?.setVisible(false);
     });
   }
 
   private updateJoystick(pointer: Phaser.Input.Pointer): void {
-    const center = new Phaser.Math.Vector2(GAME_WIDTH - 92, GAME_HEIGHT - 110);
-    const offset = new Phaser.Math.Vector2(pointer.x - center.x, pointer.y - center.y);
+    const offset = new Phaser.Math.Vector2(pointer.x - this.joystickOrigin.x, pointer.y - this.joystickOrigin.y);
     if (offset.length() > 36) {
       offset.setLength(36);
     }
     this.joystickVector.copy(offset).scale(1 / 36);
-    this.joystickThumb?.setPosition(center.x + offset.x, center.y + offset.y);
+    this.joystickThumb?.setPosition(this.joystickOrigin.x + offset.x, this.joystickOrigin.y + offset.y);
   }
 
   private drawDungeon(): void {
@@ -823,6 +817,16 @@ class DungeonScene extends Phaser.Scene {
   }
 
   update(_: number, delta: number): void {
+    try {
+      this.doUpdate(delta);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message + "\n" + err.stack?.split("\n").slice(0, 3).join("\n") : String(err);
+      this.showMessage(`ERROR: ${msg}`);
+      console.error("DungeonScene update error:", err);
+    }
+  }
+
+  private doUpdate(delta: number): void {
     const room = this.findCurrentRoom();
     if (room?.id !== this.currentRoomId) {
       this.currentRoomId = room?.id;
@@ -1078,6 +1082,9 @@ class DungeonScene extends Phaser.Scene {
 
       enemy.touchCooldown -= delta;
       this.tickEnemyStatus(enemy, delta);
+      if (!enemy.active) {
+        return true;
+      }
 
       if (!enemy.activeRoom) {
         enemy.setVelocity(0, 0);
@@ -1399,7 +1406,10 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private damagePlayer(amount: number, attribute: Attribute, bypassInvuln: boolean): void {
-    const { died } = applyDamage(this.run.player, amount, attribute, bypassInvuln);
+    const { died, damageDealt } = applyDamage(this.run.player, amount, attribute, bypassInvuln);
+    if (damageDealt > 0) {
+      console.log(`HIT: ${damageDealt.toFixed(1)} ${attribute} hp=${this.run.player.hp.toFixed(1)} died=${died}`);
+    }
     if (died) {
       this.scene.launch("GameOverScene");
       this.scene.pause();
