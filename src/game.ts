@@ -481,6 +481,28 @@ class LevelUpScene extends Phaser.Scene {
   }
 }
 
+class PauseScene extends Phaser.Scene {
+  constructor() {
+    super("PauseScene");
+  }
+
+  create(): void {
+    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.7)
+      .setInteractive();
+    makeText(this, GAME_WIDTH / 2 - 60, GAME_HEIGHT / 2 - 30, "PAUSE", 36, "#f8f1ff");
+    makeText(this, GAME_WIDTH / 2 - 120, GAME_HEIGHT / 2 + 15, "Tap / Press P to resume", 20, "#cdb4db");
+
+    const resume = () => {
+      this.scene.stop();
+      this.scene.resume("DungeonScene");
+    };
+
+    bg.on("pointerdown", resume);
+    this.input.keyboard?.on("keydown-P", resume);
+    this.input.keyboard?.once("keydown-ESC", resume);
+  }
+}
+
 class GameOverScene extends Phaser.Scene {
   constructor() {
     super("GameOverScene");
@@ -655,7 +677,10 @@ class DungeonScene extends Phaser.Scene {
     }
 
     this.input.keyboard?.on("keydown-P", () => {
-      this.scene.isPaused() ? this.scene.resume() : this.scene.pause();
+      if (!this.scene.isPaused()) {
+        this.scene.pause();
+        this.scene.launch("PauseScene");
+      }
     });
   }
 
@@ -670,7 +695,8 @@ class DungeonScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
     this.pauseButton.on("pointerdown", () => {
-      this.scene.isPaused() ? this.scene.resume() : this.scene.pause();
+      this.scene.pause();
+      this.scene.launch("PauseScene");
     });
     this.syncUi();
   }
@@ -1997,7 +2023,7 @@ export function createGame(container: string): Phaser.Game {
         debug: false
       }
     },
-    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, WandCompareScene, GameOverScene, EndingScene],
+    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, StairsConfirmScene, WandCompareScene, PauseScene, GameOverScene, EndingScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
