@@ -177,6 +177,37 @@ function createStarterState(): RunState {
   };
 }
 
+const SAVE_KEY = "arcane-descent-save";
+
+function saveRun(run: RunState): void {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(run));
+  } catch { /* quota exceeded etc */ }
+}
+
+function loadRun(): RunState | null {
+  try {
+    const data = localStorage.getItem(SAVE_KEY);
+    if (!data) return null;
+    const run = JSON.parse(data) as RunState;
+    if (!run.player || !run.floor) return null;
+    // ステータス異常・無敵をリセット
+    run.player.burnMs = 0;
+    run.player.iceMs = 0;
+    run.player.thunderMs = 0;
+    run.player.poisonMs = 0;
+    run.player.defenseBreak = 0;
+    run.player.hitInvulnMs = 0;
+    return run;
+  } catch {
+    return null;
+  }
+}
+
+function deleteSave(): void {
+  localStorage.removeItem(SAVE_KEY);
+}
+
 function createRandomWand(floor: number, starter = false): Wand {
   const fortuneBonus = Math.floor(floor / 25);
   const rarityRoll = Phaser.Math.Between(0, 100) + fortuneBonus * 8;
@@ -323,24 +354,42 @@ class TitleScene extends Phaser.Scene {
     makeText(this, 56, 320, "ローグライト / ダンジョン探索", 22, "#cdb4db");
     makeText(this, 56, 362, "移動のみ。弾は自動射撃。", 20, "#d9d9ff");
 
-    const startButton = this.add.rectangle(GAME_WIDTH / 2, 560, 300, 64, 0x241734, 1)
+    const saved = loadRun();
+    let btnY = 520;
+
+    if (saved) {
+      const continueBtn = this.add.rectangle(GAME_WIDTH / 2, btnY, 300, 54, 0x1f3a24, 1)
+        .setStrokeStyle(2, 0x80ed99)
+        .setInteractive({ useHandCursor: true });
+      makeText(this, GAME_WIDTH / 2 - 100, btnY - 14, `続きから (F${saved.floor} LV${saved.player.level})`, 22, "#80ed99");
+      continueBtn.on("pointerdown", () => this.continueRun(saved));
+      btnY += 70;
+    }
+
+    const startButton = this.add.rectangle(GAME_WIDTH / 2, btnY, 300, 54, 0x241734, 1)
       .setStrokeStyle(2, 0xf4d35e)
       .setInteractive({ useHandCursor: true });
-    makeText(this, GAME_WIDTH / 2 - 72, 540, "Start Descent", 28, "#fff2b2");
+    makeText(this, GAME_WIDTH / 2 - 72, btnY - 14, "New Game", 26, "#fff2b2");
     startButton.on("pointerdown", () => this.startRun());
 
-    makeText(this, 56, 650, `Build: ${__BUILD_TIME_JST__}`, 16, "#9ad1ff");
-    makeText(this, 56, 676, `Commit: ${__COMMIT_HASH__}`, 16, "#9ad1ff");
-    makeText(this, 56, 760, "PC: WASD / Arrow Keys", 18, "#f8f1ff");
-    makeText(this, 56, 788, "Mobile: Virtual Joystick", 18, "#f8f1ff");
-    makeText(this, 56, 860, "Tap or press SPACE / ENTER", 20, "#fff2b2");
+    makeText(this, 56, 680, `Build: ${__BUILD_TIME_JST__}`, 16, "#9ad1ff");
+    makeText(this, 56, 706, `Commit: ${__COMMIT_HASH__}`, 16, "#9ad1ff");
+    makeText(this, 56, 780, "PC: WASD / Arrow Keys", 18, "#f8f1ff");
+    makeText(this, 56, 808, "Mobile: Virtual Joystick", 18, "#f8f1ff");
 
-    this.input.once("pointerdown", () => this.startRun());
-    this.input.keyboard?.once("keydown-SPACE", () => this.startRun());
-    this.input.keyboard?.once("keydown-ENTER", () => this.startRun());
+    this.input.keyboard?.once("keydown-SPACE", () => saved ? this.continueRun(saved) : this.startRun());
+    this.input.keyboard?.once("keydown-ENTER", () => saved ? this.continueRun(saved) : this.startRun());
+  }
+
+  private continueRun(run: RunState): void {
+    if (this.scene.isActive("DungeonScene")) {
+      this.scene.stop("DungeonScene");
+    }
+    this.scene.start("DungeonScene", run);
   }
 
   private startRun(): void {
+    deleteSave();
     if (this.scene.isActive("DungeonScene")) {
       this.scene.stop("DungeonScene");
     }
@@ -1574,6 +1623,7 @@ class DungeonScene extends Phaser.Scene {
       this.spawnWandDrop(enemy.x + 18, enemy.y, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
       this.showMessage("ボス撃破、階段が現れた");
       if (this.run.floor === 100) {
+        deleteSave();
         this.scene.start("EndingScene");
         return;
       }
@@ -1680,6 +1730,7 @@ class DungeonScene extends Phaser.Scene {
   private startDeathSequence(cause: string): void {
     if (this.isDying) return;
     this.isDying = true;
+    deleteSave();
     sfx.play("gameOver");
     this.player.setVisible(false);
     this.physics.pause();
@@ -1768,6 +1819,7 @@ class DungeonScene extends Phaser.Scene {
       floor: this.run.floor,
       onDescend: () => {
         this.run.floor += 1;
+        saveRun(this.run);
         this.scene.restart(this.run);
       },
       onCancel: () => {
