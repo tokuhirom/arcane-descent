@@ -1774,7 +1774,10 @@ class DungeonScene extends Phaser.Scene {
     if (projectile.attribute === "Poison") damage *= 1.05 + this.run.player.stats.A * 0.01;
     if (projectile.attribute === "Fire") damage += 2 + this.run.player.stats.A * 0.2;
     if (projectile.attribute === "Thunder" && Math.random() < 0.15) enemy.stunMs = Math.max(enemy.stunMs, 250 + this.run.player.stats.A * 20);
-    if (Math.random() < this.run.player.stats.T * 0.015) damage *= 1.7;
+    if (Math.random() < this.run.player.stats.T * 0.015) {
+      damage *= 1.7;
+      this.showCritEffect(enemy);
+    }
 
     if (projectile.attribute === "Fire") {
       enemy.burnMs = Math.max(enemy.burnMs, 2800 + this.run.player.stats.A * 70);
@@ -2409,6 +2412,27 @@ class DungeonScene extends Phaser.Scene {
         this.messageText.setAlpha(1);
       }
     }
+  }
+
+  private showCritEffect(enemy: EnemySprite): void {
+    const text = this.add.text(enemy.x, enemy.y - 20, "CRIT!", {
+      fontFamily: "Trebuchet MS, sans-serif",
+      fontSize: "16px",
+      color: "#ffff00",
+      stroke: "#000000",
+      strokeThickness: 3
+    }).setOrigin(0.5).setDepth(10);
+    this.tweens.add({
+      targets: text,
+      y: enemy.y - 48,
+      alpha: 0,
+      duration: 600,
+      onComplete: () => text.destroy()
+    });
+    enemy.setTintFill(0xffffff);
+    this.time.delayedCall(80, () => {
+      if (enemy.active) enemy.setTint(attributeColor(enemy.attribute));
+    });
   }
 
   private showMessage(message: string): void {
