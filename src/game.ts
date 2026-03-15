@@ -1909,6 +1909,25 @@ class DungeonScene extends Phaser.Scene {
     return this.bossPhase === 1 ? 1 : this.bossPhase === 2 ? 1.18 : 1.35;
   }
 
+  private tileLineOfSight(x0: number, y0: number, x1: number, y1: number): boolean {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    let cx = x0;
+    let cy = y0;
+    while (cx !== x1 || cy !== y1) {
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; cx += sx; }
+      if (e2 < dx) { err += dx; cy += sy; }
+      if ((cx !== x1 || cy !== y1) && !this.isWalkable(cx, cy)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private updateFog(): void {
     const radius = 4 + Math.floor(this.run.player.stats.I / 2);
     const px = Math.floor(this.player.x / TILE_SIZE);
@@ -1919,7 +1938,7 @@ class DungeonScene extends Phaser.Scene {
         if (this.fog[y][x] === 2) {
           this.fog[y][x] = 1;
         }
-        if (Phaser.Math.Distance.Between(px, py, x, y) <= radius) {
+        if (Phaser.Math.Distance.Between(px, py, x, y) <= radius && this.tileLineOfSight(px, py, x, y)) {
           this.fog[y][x] = 2;
         }
       }
