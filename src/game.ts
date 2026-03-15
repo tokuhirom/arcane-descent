@@ -95,7 +95,7 @@ interface BossProfile {
 
 const GAME_WIDTH = 540;
 const GAME_HEIGHT = 960;
-const BASE_SPEED = 180;
+const BASE_SPEED = 120;
 const ATTRIBUTES: Attribute[] = ["Fire", "Ice", "Thunder", "Poison", "None"];
 const RARITIES: Rarity[] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"];
 const SPECIAL_EFFECTS: SpecialEffect[] = ["Multishot", "Homing", "Explosion", "Chain", "Lifesteal"];
@@ -112,9 +112,9 @@ const STAT_LABELS: Record<StatKey, string> = {
 const STAT_DESCRIPTIONS: Record<StatKey, string> = {
   P: "攻撃力UP",
   I: "視界・ミニマップ精度UP",
-  V: "最大HP+5, 被ダメ軽減, 回復UP",
-  F: "ワンド品質UP",
-  A: "属性効果・DoT強化",
+  V: "最大HP+5, 被ダメ軽減, 自然回復UP",
+  F: "拾える武器が強くなる",
+  A: "属性攻撃・継続ダメージ強化",
   S: "移動速度・攻撃速度UP",
   T: "クリティカル率UP"
 };
@@ -434,20 +434,20 @@ class LevelUpScene extends Phaser.Scene {
   create(data: { stats: Record<StatKey, number>; onPick: (key: StatKey) => void; onClose: () => void }): void {
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.72)
       .setInteractive();
-    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 470, 620, 0x0f1020, 0.94)
+    const panelH = 56 + STAT_KEYS.length * 52;
+    const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, panelH, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
-    makeText(this, bg.x - 190, bg.y - 230, "Level Up", 34, "#f8f1ff");
-    makeText(this, bg.x - 190, bg.y - 190, "1つ選んで強化", 18, "#cdb4db");
+    const topY = bg.y - panelH / 2 + 14;
+    makeText(this, bg.x - 190, topY, "Level Up - 1つ選んで強化", 22, "#f8f1ff");
 
     STAT_KEYS.forEach((key, index) => {
-      const x = bg.x - 170;
-      const y = bg.y - 140 + index * 66;
-      const button = this.add.rectangle(x + 160, y + 26, 320, 56, 0x241734, 1)
+      const x = bg.x - 200;
+      const y = topY + 34 + index * 52;
+      const button = this.add.rectangle(bg.x, y + 20, 420, 44, 0x241734, 1)
         .setInteractive({ useHandCursor: true })
         .setStrokeStyle(1, 0xf4d35e);
-      makeText(this, x + 16, y + 4, `${key}  ${STAT_LABELS[key]}`, 20, "#fff2b2");
-      makeText(this, x + 16, y + 24, `${STAT_DESCRIPTIONS[key]}`, 13, "#cdb4db");
-      makeText(this, x + 16, y + 40, `現在値 ${data.stats[key]} / 20`, 13, "#f8f1ff");
+      makeText(this, x + 16, y + 4, `${key} ${STAT_LABELS[key]}`, 18, "#fff2b2");
+      makeText(this, x + 16, y + 24, `${STAT_DESCRIPTIONS[key]}  [${data.stats[key]}/20]`, 12, "#cdb4db");
       button.on("pointerdown", () => {
         data.onPick(key);
         data.onClose();
@@ -945,7 +945,7 @@ class DungeonScene extends Phaser.Scene {
       speedMultiplier *= 0.82;
     }
     if (movement.lengthSq() > 0) {
-      movement.normalize().scale((BASE_SPEED + this.run.player.stats.S * 6) * speedMultiplier);
+      movement.normalize().scale((BASE_SPEED + this.run.player.stats.S * 10) * speedMultiplier);
     }
 
     if (this.knockbackVelocity.lengthSq() > 1) {
@@ -1068,7 +1068,7 @@ class DungeonScene extends Phaser.Scene {
     );
     const target = activeEnemies[0];
     this.spawnPlayerProjectile(target.x, target.y, this.run.player.wand.specialEffects);
-    this.fireTimer = Math.max(120, this.run.player.wand.stats.fireRate - this.run.player.stats.S * 6);
+    this.fireTimer = Math.max(120, this.run.player.wand.stats.fireRate - this.run.player.stats.S * 12);
   }
 
   private spawnPlayerProjectile(targetX: number, targetY: number, effects: SpecialEffect[]): void {
