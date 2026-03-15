@@ -2136,7 +2136,7 @@ class DungeonScene extends Phaser.Scene {
       for (let x = 0; x < this.layout.width; x += 1) {
         const state = this.fog[y][x];
         if (state === 2) continue;
-        const alpha = state === 1 ? 0.42 : 0.9;
+        const alpha = state === 1 ? 0.42 : 1.0;
         this.fogGraphics.fillStyle(0x000000, alpha);
         this.fogGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       }
