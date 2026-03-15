@@ -16,6 +16,7 @@ import {
   type PlayerState,
   type StatKey,
 } from "./logic";
+import { SfxManager } from "./sfx";
 
 declare const __BUILD_TIME_JST__: string;
 declare const __COMMIT_HASH__: string;
@@ -131,6 +132,8 @@ const BOSS_PROFILES: Record<number, BossProfile> = {
   90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 4.4, speedMultiplier: 1.5, fireCooldown: 760 },
   100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 6.5, speedMultiplier: 1.25, fireCooldown: 650 }
 };
+
+const sfx = new SfxManager();
 
 function pick<T>(values: T[]): T {
   return values[Phaser.Math.Between(0, values.length - 1)];
@@ -351,6 +354,7 @@ class BossIntroScene extends Phaser.Scene {
   }
 
   create(data: { floor: number }): void {
+    sfx.play("bossAlert");
     const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 420, 180, 0x120f1d, 0.92)
       .setStrokeStyle(2, 0xf4d35e);
     makeText(this, panel.x - 150, panel.y - 40, `BOSS FLOOR ${data.floor}`, 22, "#f4d35e");
@@ -583,6 +587,7 @@ class DungeonScene extends Phaser.Scene {
   private statusText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
   private pauseButton!: Phaser.GameObjects.Text;
+  private soundButton!: Phaser.GameObjects.Text;
   private joystickBase?: Phaser.GameObjects.Arc;
   private joystickThumb?: Phaser.GameObjects.Arc;
   private joystickVector = new Phaser.Math.Vector2();
@@ -695,6 +700,13 @@ class DungeonScene extends Phaser.Scene {
     this.wandText = makeText(this, 16, GAME_HEIGHT - 180, "", 16, "#f8f1ff").setScrollFactor(0);
     this.statusText = makeText(this, 16, 66, "", 16, "#9ad1ff").setScrollFactor(0);
     this.messageText = makeText(this, 24, GAME_HEIGHT - 34, "", 18, "#fff2b2").setScrollFactor(0);
+    this.soundButton = makeText(this, GAME_WIDTH - 130, GAME_HEIGHT - 90, sfx.muted ? "[x]" : "[♪]", 24, "#f8f1ff")
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    this.soundButton.on("pointerdown", () => {
+      sfx.toggleMute();
+      this.soundButton.setText(sfx.muted ? "[x]" : "[♪]");
+    });
     this.pauseButton = makeText(this, GAME_WIDTH - 64, GAME_HEIGHT - 90, "[II]", 24, "#f8f1ff")
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
@@ -1145,6 +1157,7 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private spawnPlayerProjectile(targetX: number, targetY: number, effects: SpecialEffect[]): void {
+    sfx.play("shoot");
     const shots = effects.includes("Multishot") ? 3 : 1;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, targetX, targetY);
     for (let i = 0; i < shots; i += 1) {
@@ -1462,6 +1475,7 @@ class DungeonScene extends Phaser.Scene {
     }
 
     enemy.hp -= damage;
+    sfx.play("enemyHit");
     projectile.piercing -= 1;
 
     // F50 "無属性の騎士" - reflect chance
@@ -1546,6 +1560,7 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private killEnemy(enemy: EnemySprite): void {
+    sfx.play("enemyDeath");
     const gainedXp = 5 + Math.floor(this.run.floor / 2) + Math.floor(this.run.player.stats.A * 0.6);
     this.run.player.xp += gainedXp;
     if (Math.random() < 0.08 + this.run.player.stats.F * 0.01) {
@@ -1599,7 +1614,10 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private checkLevelUp(): void {
-    processLevelUps(this.run.player);
+    const gained = processLevelUps(this.run.player);
+    if (gained > 0) {
+      sfx.play("levelUp");
+    }
 
     if (this.run.player.statPoints > 0 && !this.scene.isActive("LevelUpScene")) {
       this.scene.pause();
@@ -1653,6 +1671,7 @@ class DungeonScene extends Phaser.Scene {
   private damagePlayer(amount: number, attribute: Attribute, bypassInvuln: boolean, cause = "不明"): void {
     const { died, damageDealt } = applyDamage(this.run.player, amount, attribute, bypassInvuln);
     if (damageDealt > 0) {
+      sfx.play("playerHit");
       console.log(`HIT: ${damageDealt.toFixed(1)} ${attribute} hp=${this.run.player.hp.toFixed(1)} died=${died}`);
     }
     if (died) {
@@ -1663,6 +1682,7 @@ class DungeonScene extends Phaser.Scene {
   private startDeathSequence(cause: string): void {
     if (this.isDying) return;
     this.isDying = true;
+    sfx.play("gameOver");
     this.player.setVisible(false);
     this.physics.pause();
 
@@ -1704,6 +1724,7 @@ class DungeonScene extends Phaser.Scene {
 
   private onLootChest(_: Phaser.GameObjects.GameObject, chestObj: Phaser.GameObjects.GameObject): void {
     const chest = chestObj as Phaser.Physics.Arcade.Image;
+    sfx.play("pickup");
     this.spawnWandDrop(chest.x, chest.y, createRandomWand(this.run.floor + 4 + this.run.player.stats.F));
     this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + 8);
     this.showMessage("宝箱からワンドが落ちた");
@@ -1721,6 +1742,7 @@ class DungeonScene extends Phaser.Scene {
       current: this.run.player.wand,
       found: loot.wand,
       onEquip: () => {
+        sfx.play("pickup");
         this.run.player.wand = loot.wand;
         this.showMessage(`${loot.wand.rarity} ${loot.wand.name} を装備した`);
         loot.destroy();
@@ -1742,6 +1764,7 @@ class DungeonScene extends Phaser.Scene {
     if (this.scene.isActive("StairsConfirmScene")) {
       return;
     }
+    sfx.play("stairs");
     this.scene.pause();
     this.scene.launch("StairsConfirmScene", {
       floor: this.run.floor,
