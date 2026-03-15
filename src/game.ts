@@ -8,6 +8,14 @@ import {
   TileType,
   generateDungeon
 } from "./dungeon";
+import {
+  applyDamage,
+  applyPassiveTick,
+  updatePlayerTimers,
+  processLevelUps,
+  type PlayerState,
+  type StatKey,
+} from "./logic";
 
 declare const __BUILD_TIME_JST__: string;
 declare const __COMMIT_HASH__: string;
@@ -15,8 +23,6 @@ declare const __COMMIT_HASH__: string;
 type FogState = 0 | 1 | 2;
 type Rarity = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary";
 type SpecialEffect = "Multishot" | "Homing" | "Explosion" | "Chain" | "Lifesteal";
-type StatKey = "P" | "I" | "V" | "F" | "A" | "S" | "T";
-
 interface Wand {
   name: string;
   attribute: Attribute;
@@ -30,21 +36,8 @@ interface Wand {
   specialEffects: SpecialEffect[];
 }
 
-interface PlayerState {
-  hp: number;
-  maxHp: number;
-  xp: number;
-  level: number;
-  nextXp: number;
-  statPoints: number;
-  stats: Record<StatKey, number>;
+interface GamePlayerState extends PlayerState {
   wand: Wand;
-  burnMs: number;
-  iceMs: number;
-  thunderMs: number;
-  poisonMs: number;
-  defenseBreak: number;
-  hitInvulnMs: number;
 }
 
 interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
@@ -83,7 +76,7 @@ interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
 
 interface RunState {
   floor: number;
-  player: PlayerState;
+  player: GamePlayerState;
 }
 
 interface LootSprite extends Phaser.Physics.Arcade.Image {
@@ -1251,12 +1244,7 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private checkLevelUp(): void {
-    while (this.run.player.xp >= this.run.player.nextXp) {
-      this.run.player.xp -= this.run.player.nextXp;
-      this.run.player.level += 1;
-      this.run.player.nextXp = Math.floor(this.run.player.nextXp * 1.25);
-      this.run.player.statPoints += 1;
-    }
+    processLevelUps(this.run.player);
 
     if (this.run.player.statPoints > 0 && !this.scene.isActive("LevelUpScene")) {
       this.scene.pause();
@@ -1304,25 +1292,8 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private damagePlayer(amount: number, attribute: Attribute, bypassInvuln: boolean): void {
-    if (!bypassInvuln && this.run.player.hitInvulnMs > 0) {
-      return;
-    }
-
-    const vitalityReduction = 1 - this.run.player.stats.V * 0.01;
-    const poisonPenalty = 1 + this.run.player.defenseBreak;
-    this.run.player.hp -= amount * vitalityReduction * poisonPenalty;
-    this.run.player.hitInvulnMs = bypassInvuln ? this.run.player.hitInvulnMs : 450;
-    if (attribute === "Fire") {
-      this.run.player.burnMs = Math.max(this.run.player.burnMs, 2500);
-    } else if (attribute === "Ice") {
-      this.run.player.iceMs = Math.max(this.run.player.iceMs, 2000);
-    } else if (attribute === "Thunder") {
-      this.run.player.thunderMs = Math.max(this.run.player.thunderMs, 180);
-    } else if (attribute === "Poison") {
-      this.run.player.poisonMs = Math.max(this.run.player.poisonMs, 3200);
-      this.run.player.defenseBreak = Math.min(0.35, this.run.player.defenseBreak + 0.07);
-    }
-    if (this.run.player.hp <= 0) {
+    const { died } = applyDamage(this.run.player, amount, attribute, bypassInvuln);
+    if (died) {
       this.scene.launch("GameOverScene");
       this.scene.pause();
     }
@@ -1356,33 +1327,13 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private updatePlayerStatus(delta: number): void {
-    this.run.player.hitInvulnMs = Math.max(0, this.run.player.hitInvulnMs - delta);
-    if (this.run.player.thunderMs > 0) {
-      this.run.player.thunderMs = Math.max(0, this.run.player.thunderMs - delta);
-    }
+    updatePlayerTimers(this.run.player, delta);
 
     this.passiveTickMs += delta;
-    this.run.player.burnMs = Math.max(0, this.run.player.burnMs - delta);
-    this.run.player.iceMs = Math.max(0, this.run.player.iceMs - delta);
-    this.run.player.poisonMs = Math.max(0, this.run.player.poisonMs - delta);
-
-    if (this.run.player.poisonMs <= 0) {
-      this.run.player.defenseBreak = Math.max(0, this.run.player.defenseBreak - 0.005);
-    }
-
     if (this.passiveTickMs >= 500) {
       this.passiveTickMs = 0;
-      if (this.run.player.burnMs > 0) {
-        this.damagePlayer(2.5, "Fire", true);
-      }
-      if (this.run.player.poisonMs > 0) {
-        this.damagePlayer(1.2, "Poison", true);
-      }
-      const regen = 0.18 + this.run.player.stats.V * 0.03;
-      if (this.run.player.burnMs <= 0) {
-        this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + regen);
-      }
-      if (this.run.player.hp <= 0) {
+      const { died } = applyPassiveTick(this.run.player);
+      if (died) {
         this.scene.launch("GameOverScene");
         this.scene.pause();
       }
