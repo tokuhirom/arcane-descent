@@ -1413,9 +1413,10 @@ class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private onEnemyProjectileHitsPlayer(projectileObj: Phaser.GameObjects.GameObject): void {
-    const projectile = projectileObj as ProjectileSprite;
-    if (!projectile.active) {
+  private onEnemyProjectileHitsPlayer(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
+    // Phaser may pass (player, projectile) or (projectile, player) depending on overlap order
+    const projectile = (obj1 === this.player ? obj2 : obj1) as ProjectileSprite;
+    if (!projectile.active || (projectile as unknown) === this.player) {
       return;
     }
     this.damagePlayer(projectile.damage, projectile.attribute, false, `${projectile.attribute}の弾`);
