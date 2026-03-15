@@ -606,7 +606,7 @@ class DungeonScene extends Phaser.Scene {
         try {
           fn.apply(this, args);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
+          const msg = err instanceof Error ? `${err.message}\n${err.stack?.split("\n").slice(1, 3).join("\n")}` : String(err);
           console.error("Physics callback error:", err);
           this.showMessage(`ERROR: ${msg}`);
         }
@@ -645,6 +645,12 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private joystickOrigin = new Phaser.Math.Vector2();
+
+  private safeSetVelocity(sprite: Phaser.Physics.Arcade.Sprite | Phaser.Physics.Arcade.Image, x: number, y: number): void {
+    if (sprite.body) {
+      sprite.setVelocity(x, y);
+    }
+  }
 
   private createJoystick(): void {
     this.joystickBase = this.add.circle(0, 0, 44, 0x3a254f, 0.4).setScrollFactor(0).setVisible(false).setDepth(20);
@@ -750,10 +756,13 @@ class DungeonScene extends Phaser.Scene {
     this.spawnBossVariants();
 
     this.layout.rooms
-      .filter((room) => room.kind === "treasure")
+      .filter((room) => room.kind === "normal")
       .forEach((room) => {
-        const center = roomCenter(room);
-        this.chests.create(center.x * TILE_SIZE, center.y * TILE_SIZE, "chest");
+        if (Math.random() < 0.35) {
+          const cx = (room.x + 1 + Math.random() * (room.width - 2)) * TILE_SIZE;
+          const cy = (room.y + 1 + Math.random() * (room.height - 2)) * TILE_SIZE;
+          this.chests.create(cx, cy, "chest");
+        }
       });
   }
 
@@ -959,7 +968,7 @@ class DungeonScene extends Phaser.Scene {
     const stepY = movement.y * (delta / 1000);
     this.moveActorWithCollisions(this.player, stepX, 0);
     this.moveActorWithCollisions(this.player, 0, stepY);
-    this.player.setVelocity(0, 0);
+    this.safeSetVelocity(this.player,0, 0);
   }
 
   private resolveWallCollision(bodyOwner: Phaser.Physics.Arcade.Sprite | Phaser.Physics.Arcade.Image): void {
@@ -1086,11 +1095,13 @@ class DungeonScene extends Phaser.Scene {
       projectile.chainHits = 0;
       projectile.setScale(0.9);
       projectile.setTint(attributeColor(projectile.attribute));
-      this.physics.velocityFromRotation(
-        baseAngle + spread,
-        this.run.player.wand.stats.projectileSpeed,
-        (projectile.body as Phaser.Physics.Arcade.Body).velocity
-      );
+      if (projectile.body) {
+        this.physics.velocityFromRotation(
+          baseAngle + spread,
+          this.run.player.wand.stats.projectileSpeed,
+          (projectile.body as Phaser.Physics.Arcade.Body).velocity
+        );
+      }
     }
   }
 
@@ -1109,7 +1120,7 @@ class DungeonScene extends Phaser.Scene {
       }
 
       if (!enemy.activeRoom) {
-        enemy.setVelocity(0, 0);
+        this.safeSetVelocity(enemy,0, 0);
         return true;
       }
 
@@ -1119,7 +1130,7 @@ class DungeonScene extends Phaser.Scene {
       }
 
       if (enemy.stunMs > 0) {
-        enemy.setVelocity(0, 0);
+        this.safeSetVelocity(enemy,0, 0);
         return true;
       }
 
@@ -1131,7 +1142,7 @@ class DungeonScene extends Phaser.Scene {
       const bossPhaseMultiplier = enemy.bossTier > 0 ? this.getBossPhaseMultiplier(enemy) : 1;
 
       if (this.run.floor === 80 && enemy.roomId === this.layout.bossRoomId) {
-        enemy.setVelocity(0, 0);
+        this.safeSetVelocity(enemy,0, 0);
         if (enemy.fireCooldown <= 0) {
           for (let i = 0; i < 3; i += 1) {
             this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(-20 + i * 20));
@@ -1139,10 +1150,10 @@ class DungeonScene extends Phaser.Scene {
           enemy.fireCooldown = 900;
         }
       } else if (enemy.kind === "chaser" || enemy.kind === "splitter" || enemy.kind === "summoner") {
-        enemy.setVelocity(direction.x * enemy.speed * speedMultiplier * bossPhaseMultiplier, direction.y * enemy.speed * speedMultiplier * bossPhaseMultiplier);
+        this.safeSetVelocity(enemy,direction.x * enemy.speed * speedMultiplier * bossPhaseMultiplier, direction.y * enemy.speed * speedMultiplier * bossPhaseMultiplier);
       } else if (enemy.kind === "shooter") {
         const desired = distance > 180 ? 1 : distance < 120 ? -1 : 0;
-        enemy.setVelocity(direction.x * enemy.speed * desired * speedMultiplier, direction.y * enemy.speed * desired * speedMultiplier);
+        this.safeSetVelocity(enemy,direction.x * enemy.speed * desired * speedMultiplier, direction.y * enemy.speed * desired * speedMultiplier);
         if (enemy.fireCooldown <= 0) {
           const volley = this.run.floor === 100 && enemy.roomId === this.layout.bossRoomId ? 4 : 1;
           for (let i = 0; i < volley; i += 1) {
@@ -1152,7 +1163,7 @@ class DungeonScene extends Phaser.Scene {
         }
       } else if (enemy.kind === "rusher") {
         const speed = distance < 120 ? enemy.speed * 2.4 : enemy.speed * 0.7;
-        enemy.setVelocity(direction.x * speed * speedMultiplier * bossPhaseMultiplier, direction.y * speed * speedMultiplier * bossPhaseMultiplier);
+        this.safeSetVelocity(enemy,direction.x * speed * speedMultiplier * bossPhaseMultiplier, direction.y * speed * speedMultiplier * bossPhaseMultiplier);
       }
 
       if (enemy.kind === "summoner" && enemy.summonCooldown <= 0) {
@@ -1204,6 +1215,7 @@ class DungeonScene extends Phaser.Scene {
     projectile.lifetimeMs = 1400;
     projectile.setScale(0.75);
     projectile.setTint(attributeColor(enemy.attribute));
+    if (!projectile.body) return;
     if (spread === 0) {
       this.physics.moveToObject(projectile, this.player, 220 + this.run.floor + enemy.bossTier * 18);
       return;

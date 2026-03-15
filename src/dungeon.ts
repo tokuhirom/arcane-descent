@@ -9,7 +9,7 @@ export const TileType = {
 } as const;
 
 export type TileTypeValue = (typeof TileType)[keyof typeof TileType];
-export type RoomKind = "start" | "normal" | "treasure" | "stairs" | "boss";
+export type RoomKind = "start" | "normal" | "stairs" | "boss";
 export type EnemyKind = "chaser" | "shooter" | "rusher" | "splitter" | "summoner";
 export type Attribute = "Fire" | "Ice" | "Thunder" | "Poison" | "None";
 
@@ -39,7 +39,6 @@ export interface DungeonLayout {
   rooms: Room[];
   start: Phaser.Math.Vector2;
   stairs: Phaser.Math.Vector2;
-  treasureRooms: number[];
   spawns: EnemySpawn[];
   bossRoomId?: number;
 }
@@ -172,7 +171,7 @@ function createBossFloor(tiles: TileTypeValue[][], floor: number): DungeonLayout
   const rooms: Room[] = [
     { id: 0, x: 4, y: 14, width: 10, height: 8, kind: "start", neighbors: [1] },
     { id: 1, x: 18, y: 13, width: 9, height: 10, kind: "normal", neighbors: [0, 2, 3] },
-    { id: 2, x: 31, y: 6, width: 9, height: 8, kind: "treasure", neighbors: [1] },
+    { id: 2, x: 31, y: 6, width: 9, height: 8, kind: "normal", neighbors: [1] },
     { id: 3, x: 31, y: 20, width: 19, height: 14, kind: "boss", neighbors: [1] }
   ];
 
@@ -191,7 +190,6 @@ function createBossFloor(tiles: TileTypeValue[][], floor: number): DungeonLayout
     rooms,
     start: centerOf(rooms[0]),
     stairs: bossCenter,
-    treasureRooms: [2],
     spawns: [
       {
         x: bossCenter.x,
@@ -274,28 +272,14 @@ export function generateDungeon(floor: number): DungeonLayout {
   stairsRoom.kind = floor % 10 === 0 ? "boss" : "stairs";
 
   const excluded = new Set<number>([startRoom.id, stairsRoom.id]);
-  const treasureRoom = pickLeafRoom(
-    rooms.map((room) => room.id),
-    rooms,
-    excluded
-  );
-  if (treasureRoom !== undefined) {
-    rooms[treasureRoom].kind = "treasure";
-    excluded.add(treasureRoom);
-  }
 
   finalizeWalls(tiles);
 
   const spawns: EnemySpawn[] = [];
-  const treasureRooms: number[] = [];
   let bossRoomId: number | undefined;
 
   rooms.forEach((room) => {
     if (room.kind === "start") {
-      return;
-    }
-    if (room.kind === "treasure") {
-      treasureRooms.push(room.id);
       return;
     }
 
@@ -335,7 +319,6 @@ export function generateDungeon(floor: number): DungeonLayout {
     rooms,
     start: startCenter,
     stairs: centerOf(stairsRoom),
-    treasureRooms,
     spawns,
     bossRoomId
   };
