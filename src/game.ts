@@ -141,14 +141,14 @@ const STAT_DESCRIPTIONS: Record<StatKey, string> = {
 const BOSS_PROFILES: Record<number, BossProfile> = {
   10: { name: "炎の魔獣", attribute: "Fire", kind: "rusher", maxHpMultiplier: 20, speedMultiplier: 1.25, fireCooldown: 1200 },
   20: { name: "氷の巨人", attribute: "Ice", kind: "shooter", maxHpMultiplier: 60, speedMultiplier: 0.85, fireCooldown: 1000 },
-  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 80, speedMultiplier: 1.6, fireCooldown: 700 },
+  30: { name: "雷の鳥", attribute: "Thunder", kind: "rusher", maxHpMultiplier: 60, speedMultiplier: 1.6, fireCooldown: 700 },
   40: { name: "毒の蜘蛛", attribute: "Poison", kind: "summoner", maxHpMultiplier: 100, speedMultiplier: 1.05, fireCooldown: 1100 },
   50: { name: "無属性の騎士", attribute: "None", kind: "shooter", maxHpMultiplier: 130, speedMultiplier: 1.1, fireCooldown: 820 },
   60: { name: "炎氷の双子", attribute: "Fire", kind: "summoner", maxHpMultiplier: 170, speedMultiplier: 1.2, fireCooldown: 900 },
   70: { name: "雷の魔導士", attribute: "Thunder", kind: "shooter", maxHpMultiplier: 200, speedMultiplier: 1.3, fireCooldown: 620 },
   80: { name: "毒の樹", attribute: "Poison", kind: "summoner", maxHpMultiplier: 220, speedMultiplier: 0.4, fireCooldown: 950 },
   90: { name: "虚無の影", attribute: "None", kind: "splitter", maxHpMultiplier: 210, speedMultiplier: 1.5, fireCooldown: 760 },
-  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 300, speedMultiplier: 1.25, fireCooldown: 650 }
+  100: { name: "深淵の王", attribute: "None", kind: "summoner", maxHpMultiplier: 250, speedMultiplier: 1.25, fireCooldown: 650 }
 };
 
 const sfx = new SfxManager();
@@ -245,11 +245,13 @@ function createRandomWand(floor: number, starter = false): Wand {
   const effectCount = Math.max(0, rarityIndex - 1);
   const effects = Phaser.Utils.Array.Shuffle([...SPECIAL_EFFECTS]).slice(0, effectCount);
   const attribute = starter ? "None" : pick(ATTRIBUTES);
-  const damage = 8 + floor * 0.7 + rarityIndex * 4;
+  const hasMultishot = effects.includes("Multishot");
+  const damage = (8 + floor * 0.7 + rarityIndex * 4) * (hasMultishot ? 0.4 : 1);
   const fireRate = Math.max(180, 520 - floor * 2 - rarityIndex * 45);
+  const wandType = hasMultishot ? ["ガトリング", "散弾杖", "拡散呪具"] : ["ワンド", "杖", "呪具"];
 
   return {
-    name: `${attribute === "None" ? "魔力" : attribute}の${["ワンド", "杖", "呪具"][Phaser.Math.Between(0, 2)]}`,
+    name: `${attribute === "None" ? "魔力" : attribute}の${wandType[Phaser.Math.Between(0, 2)]}`,
     attribute,
     rarity,
     stats: {
@@ -548,10 +550,8 @@ class WandCompareScene extends Phaser.Scene {
     const calcDps = (wand: Wand): number => {
       const dmg = wand.stats.damage * (1 + data.pStat * 0.08);
       const interval = Math.max(120, wand.stats.fireRate - data.sStat * 12);
-      const isMulti = wand.specialEffects.includes("Multishot");
-      const perShot = isMulti ? dmg * 0.45 : dmg;
-      const shots = isMulti ? 3 : 1;
-      return perShot * shots / (interval / 1000);
+      const shots = wand.specialEffects.includes("Multishot") ? 3 : 1;
+      return dmg * shots / (interval / 1000);
     };
 
     const drawWand = (wand: Wand, x: number, y: number, label: string, highlight: boolean) => {
@@ -1375,14 +1375,13 @@ class DungeonScene extends Phaser.Scene {
       const spread = shots === 1 ? 0 : Phaser.Math.DegToRad((i - 1) * 12);
       const projectile = this.projectiles.create(this.player.x, this.player.y, "projectile") as ProjectileSprite;
       projectile.owner = "player";
-      const baseDamage = this.run.player.wand.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 1.5 : 1);
-      projectile.damage = shots > 1 ? baseDamage * 0.45 : baseDamage;
+      projectile.damage = this.run.player.wand.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 1.5 : 1);
       projectile.piercing = this.run.player.wand.stats.piercing;
       projectile.attribute = this.run.player.wand.attribute;
       projectile.specialEffects = [...effects];
       projectile.lifetimeMs = 1200;
       projectile.chainHits = 0;
-      projectile.setScale(shots > 1 ? 0.65 : 0.9);
+      projectile.setScale(shots > 1 ? 0.6 : 0.9);
       projectile.setTint(attributeColor(projectile.attribute));
       if (projectile.body) {
         this.physics.velocityFromRotation(

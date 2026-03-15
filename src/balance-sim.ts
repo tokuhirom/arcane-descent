@@ -54,7 +54,8 @@ function createRandomWand(floor: number, starter = false): Wand {
   const ri = rarityValue(rarity);
   const effectCount = Math.max(0, ri - 1);
   const effects = [...SPECIAL_EFFECTS].sort(() => Math.random() - 0.5).slice(0, effectCount) as SpecialEffect[];
-  const damage = 8 + floor * 0.7 + ri * 4;
+  const hasMultishot = effects.includes("Multishot");
+  const damage = (8 + floor * 0.7 + ri * 4) * (hasMultishot ? 0.4 : 1);
   const fireRate = Math.max(180, 520 - floor * 2 - ri * 45);
 
   return {
@@ -69,13 +70,11 @@ function createRandomWand(floor: number, starter = false): Wand {
 // ---- DPS calculation (mirroring game logic) ----
 
 function calcDps(wand: Wand, stats: PlayerStats, powerBoost = false): number {
-  const baseDmg = wand.stats.damage * (1 + stats.P * 0.08) * (powerBoost ? 1.5 : 1);
+  const dmg = wand.stats.damage * (1 + stats.P * 0.08) * (powerBoost ? 1.5 : 1);
   const interval = Math.max(120, wand.stats.fireRate - stats.S * 12);
-  const isMulti = wand.specialEffects.includes("Multishot");
-  const perShot = isMulti ? baseDmg * 0.45 : baseDmg;
-  const shots = isMulti ? 3 : 1;
+  const shots = wand.specialEffects.includes("Multishot") ? 3 : 1;
   const critMultiplier = 1 + stats.T * 0.015 * 0.7;
-  return perShot * shots * critMultiplier / (interval / 1000);
+  return dmg * shots * critMultiplier / (interval / 1000);
 }
 
 // ---- Boss HP calculation (mirroring game.ts) ----
