@@ -458,15 +458,22 @@ class WandCompareScene extends Phaser.Scene {
     super("WandCompareScene");
   }
 
-  create(data: { current: Wand; found: Wand; onEquip: () => void; onSkip: () => void }): void {
+  create(data: { current: Wand; found: Wand; pStat: number; sStat: number; onEquip: () => void; onSkip: () => void }): void {
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 340, 0x0f1020, 0.94)
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 380, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
 
     const cx = panel.x - 200;
-    const cy = panel.y - 140;
+    const cy = panel.y - 160;
 
     makeText(this, cx, cy, "ワンド比較", 24, "#f8f1ff");
+
+    const calcDps = (wand: Wand): number => {
+      const dmg = wand.stats.damage * (1 + data.pStat * 0.08);
+      const interval = Math.max(120, wand.stats.fireRate - data.sStat * 12);
+      const shots = wand.specialEffects.includes("Multishot") ? 3 : 1;
+      return dmg * shots / (interval / 1000);
+    };
 
     const drawWand = (wand: Wand, x: number, y: number, label: string, highlight: boolean) => {
       const color = highlight ? "#f4d35e" : "#cdb4db";
@@ -474,12 +481,14 @@ class WandCompareScene extends Phaser.Scene {
       makeText(this, x, y + 22, `${wand.name}`, 18, "#f8f1ff");
       makeText(this, x, y + 46, `${wand.rarity}  ${wand.attribute}`, 14, "#cdb4db");
       makeText(this, x, y + 66, `攻撃 ${wand.stats.damage.toFixed(1)}  速度 ${wand.stats.fireRate}  貫通 ${wand.stats.piercing}`, 14, "#9ad1ff");
+      const dps = calcDps(wand);
+      makeText(this, x, y + 86, `DPS ${dps.toFixed(1)}`, 15, "#ff6b6b");
       const fx = wand.specialEffects.length > 0 ? wand.specialEffects.join(", ") : "-";
-      makeText(this, x, y + 86, fx, 13, "#80ed99");
+      makeText(this, x, y + 104, fx, 13, "#80ed99");
     };
 
     drawWand(data.current, cx, cy + 36, "装備中", false);
-    drawWand(data.found, cx, cy + 150, "発見!", true);
+    drawWand(data.found, cx, cy + 170, "発見!", true);
 
     const equipBtn = this.add.rectangle(panel.x - 70, panel.y + 130, 140, 40, 0x3a254f, 1)
       .setInteractive({ useHandCursor: true })
@@ -1790,6 +1799,8 @@ class DungeonScene extends Phaser.Scene {
     this.scene.launch("WandCompareScene", {
       current: this.run.player.wand,
       found: loot.wand,
+      pStat: this.run.player.stats.P,
+      sStat: this.run.player.stats.S,
       onEquip: () => {
         sfx.play("pickup");
         this.run.player.wand = loot.wand;
