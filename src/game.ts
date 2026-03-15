@@ -64,6 +64,8 @@ interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
   touchCooldown: number;
   bossTier: number;
   splitDepth: number;
+  bossTag?: string;
+  isDecoy?: boolean;
 }
 
 interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
@@ -79,6 +81,11 @@ interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
 interface RunState {
   floor: number;
   player: PlayerState;
+}
+
+interface LootSprite extends Phaser.Physics.Arcade.Image {
+  lootType: "wand";
+  wand: Wand;
 }
 
 interface BossProfile {
@@ -251,6 +258,18 @@ class BootScene extends Phaser.Scene {
     g.fillStyle(0x9d4edd, 1);
     g.fillRect(0, 0, 20, 20);
     g.generateTexture("stairs", 20, 20);
+    g.clear();
+
+    g.fillStyle(0xf4d35e, 1);
+    g.fillRect(0, 6, 20, 6);
+    g.fillStyle(0x8e7cf6, 1);
+    g.fillRect(2, 0, 8, 8);
+    g.generateTexture("wand-drop", 20, 12);
+    g.clear();
+
+    g.fillStyle(0xd7263d, 1);
+    g.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    g.generateTexture("door-block", TILE_SIZE, TILE_SIZE);
     g.destroy();
 
     this.scene.start("DungeonScene", createStarterState());
@@ -352,6 +371,8 @@ class DungeonScene extends Phaser.Scene {
   private enemyProjectiles!: Phaser.Physics.Arcade.Group;
   private enemies!: Phaser.Physics.Arcade.Group;
   private chests!: Phaser.Physics.Arcade.StaticGroup;
+  private lootDrops!: Phaser.Physics.Arcade.Group;
+  private bossDoors!: Phaser.Physics.Arcade.StaticGroup;
   private stairs!: Phaser.Physics.Arcade.Image;
   private fireTimer = 0;
   private fog: FogState[][] = [];
@@ -372,6 +393,10 @@ class DungeonScene extends Phaser.Scene {
   private roomTitleTimer = 0;
   private passiveTickMs = 0;
   private bossPhase = 1;
+  private bossDoorLocked = false;
+  private readonly usingTouchControls =
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window || navigator.maxTouchPoints > 0 || window.matchMedia?.("(pointer: coarse)").matches === true);
 
   constructor() {
     super("DungeonScene");
@@ -390,6 +415,8 @@ class DungeonScene extends Phaser.Scene {
     this.projectiles = this.physics.add.group();
     this.enemyProjectiles = this.physics.add.group();
     this.chests = this.physics.add.staticGroup();
+    this.lootDrops = this.physics.add.group();
+    this.bossDoors = this.physics.add.staticGroup();
 
     this.layout = generateDungeon(this.run.floor);
     this.fog = Array.from({ length: this.layout.height }, () =>
@@ -427,6 +454,7 @@ class DungeonScene extends Phaser.Scene {
     this.physics.add.overlap(this.enemyProjectiles, this.player, this.onEnemyProjectileHitsPlayer as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
     this.physics.add.overlap(this.player, this.enemies, this.onPlayerTouchesEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
     this.physics.add.overlap(this.player, this.chests, this.onLootChest as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
+    this.physics.add.overlap(this.player, this.lootDrops, this.onCollectLoot as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
     this.physics.add.overlap(this.player, this.stairs, this.onReachStairs as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
 
     if (this.run.floor % 10 === 0) {
@@ -451,12 +479,21 @@ class DungeonScene extends Phaser.Scene {
     this.pauseButton.on("pointerdown", () => {
       this.scene.isPaused() ? this.scene.resume() : this.scene.pause();
     });
+    if (!this.usingTouchControls) {
+      this.joystickBase?.setVisible(false);
+      this.joystickThumb?.setVisible(false);
+    }
     this.syncUi();
   }
 
   private createJoystick(): void {
     this.joystickBase = this.add.circle(92, GAME_HEIGHT - 110, 44, 0x3a254f, 0.4).setScrollFactor(0);
     this.joystickThumb = this.add.circle(92, GAME_HEIGHT - 110, 18, 0xcdb4db, 0.6).setScrollFactor(0);
+    if (!this.usingTouchControls) {
+      this.joystickBase.setVisible(false);
+      this.joystickThumb.setVisible(false);
+      return;
+    }
     const center = new Phaser.Math.Vector2(92, GAME_HEIGHT - 110);
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -534,6 +571,8 @@ class DungeonScene extends Phaser.Scene {
       enemy.touchCooldown = 0;
       enemy.bossTier = bossProfile ? Math.max(1, Math.floor(this.run.floor / 10)) : 0;
       enemy.splitDepth = enemy.kind === "splitter" ? 1 : 0;
+      enemy.bossTag = bossProfile ? `boss-${this.run.floor}` : undefined;
+      enemy.isDecoy = false;
       enemy.setDepth(3);
       enemy.setCircle(8);
       if (spawn.elite || bossProfile) {
@@ -544,7 +583,15 @@ class DungeonScene extends Phaser.Scene {
         enemy.setScale(1.7);
         enemy.setTint(attributeColor(enemy.attribute));
       }
+      if (this.run.floor === 80 && bossProfile) {
+        enemy.speed = 0;
+      }
+      if (this.run.floor === 90 && bossProfile) {
+        enemy.bossTag = "shadow-core";
+      }
     });
+
+    this.spawnBossVariants();
 
     this.layout.rooms
       .filter((room) => room.kind === "treasure")
@@ -554,18 +601,98 @@ class DungeonScene extends Phaser.Scene {
       });
   }
 
+  private spawnBossVariants(): void {
+    if (this.layout.bossRoomId === undefined) {
+      return;
+    }
+    const boss = (this.enemies.getChildren() as EnemySprite[]).find((enemy) => enemy.roomId === this.layout.bossRoomId);
+    if (!boss) {
+      return;
+    }
+
+    if (this.run.floor === 60) {
+      const twin = this.enemies.create(boss.x + 52, boss.y - 22, "enemy-shooter") as EnemySprite;
+      twin.roomId = boss.roomId;
+      twin.kind = "shooter";
+      twin.elite = true;
+      twin.activeRoom = false;
+      twin.fireCooldown = 700;
+      twin.summonCooldown = 999999;
+      twin.attribute = "Ice";
+      twin.weakness = "Thunder";
+      twin.resistance = "Fire";
+      twin.maxHp = boss.maxHp * 0.82;
+      twin.hp = twin.maxHp;
+      twin.speed = boss.speed * 0.9;
+      twin.burnMs = 0;
+      twin.slowMs = 0;
+      twin.stunMs = 0;
+      twin.defenseBreak = 0;
+      twin.touchCooldown = 0;
+      twin.bossTier = boss.bossTier;
+      twin.splitDepth = 0;
+      twin.bossTag = "twin-ice";
+      twin.isDecoy = false;
+      twin.setDepth(3);
+      twin.setCircle(8);
+      twin.setScale(1.55);
+      twin.setTint(attributeColor("Ice"));
+
+      boss.attribute = "Fire";
+      boss.bossTag = "twin-fire";
+      boss.setTint(attributeColor("Fire"));
+    }
+
+    if (this.run.floor === 90) {
+      for (let i = 0; i < 2; i += 1) {
+        const decoy = this.enemies.create(
+          boss.x + Phaser.Math.Between(-72, 72),
+          boss.y + Phaser.Math.Between(-72, 72),
+          "enemy-splitter"
+        ) as EnemySprite;
+        decoy.roomId = boss.roomId;
+        decoy.kind = "splitter";
+        decoy.elite = true;
+        decoy.activeRoom = false;
+        decoy.fireCooldown = 0;
+        decoy.summonCooldown = 999999;
+        decoy.attribute = "None";
+        decoy.weakness = "Fire";
+        decoy.resistance = "None";
+        decoy.maxHp = boss.maxHp * 0.28;
+        decoy.hp = decoy.maxHp;
+        decoy.speed = boss.speed * 1.1;
+        decoy.burnMs = 0;
+        decoy.slowMs = 0;
+        decoy.stunMs = 0;
+        decoy.defenseBreak = 0;
+        decoy.touchCooldown = 0;
+        decoy.bossTier = boss.bossTier;
+        decoy.splitDepth = 0;
+        decoy.bossTag = "shadow-decoy";
+        decoy.isDecoy = true;
+        decoy.setDepth(3);
+        decoy.setCircle(8);
+        decoy.setScale(1.3);
+        decoy.setAlpha(0.65);
+      }
+    }
+  }
+
   update(_: number, delta: number): void {
     const room = this.findCurrentRoom();
     if (room?.id !== this.currentRoomId) {
       this.currentRoomId = room?.id;
       this.showRoomTitle(room);
-      this.enemies.children.iterate((child) => {
-        const enemy = child as EnemySprite | null;
-        if (!enemy) return true;
-        enemy.activeRoom = room !== undefined && enemy.roomId === room.id;
-        return true;
-      });
+      this.updateBossDoorState(room);
     }
+
+    this.enemies.children.iterate((child) => {
+      const enemy = child as EnemySprite | null;
+      if (!enemy) return true;
+      enemy.activeRoom = this.shouldEnemyEngage(enemy);
+      return true;
+    });
 
     this.updatePlayerStatus(delta);
     this.handlePlayerMovement(delta);
@@ -574,6 +701,50 @@ class DungeonScene extends Phaser.Scene {
     this.updateFog();
     this.syncUi();
     this.updateTransientUi(delta);
+  }
+
+  private updateBossDoorState(room?: Room): void {
+    if (!room || room.kind !== "boss" || this.bossDoorLocked || this.layout.bossRoomId === undefined) {
+      return;
+    }
+
+    this.bossDoorLocked = true;
+    this.showMessage("扉が閉まり、退路が断たれた");
+    const bossRoom = room;
+    const entranceX = bossRoom.x;
+    const entranceY = Math.floor(bossRoom.y + bossRoom.height / 2);
+    for (let offset = -1; offset <= 1; offset += 1) {
+      const door = this.bossDoors.create((entranceX - 1) * TILE_SIZE, (entranceY + offset) * TILE_SIZE, "door-block");
+      door.setDepth(2);
+    }
+  }
+
+  private shouldEnemyEngage(enemy: EnemySprite): boolean {
+    const sameRoom = this.currentRoomId !== undefined && enemy.roomId === this.currentRoomId;
+    const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+    const near = distance <= TILE_SIZE * 8;
+    const visible = distance <= TILE_SIZE * 14 && this.hasLineOfSight(enemy.x, enemy.y, this.player.x, this.player.y);
+    return sameRoom || near || visible;
+  }
+
+  private hasLineOfSight(fromX: number, fromY: number, toX: number, toY: number): boolean {
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const steps = Math.ceil(distance / (TILE_SIZE / 3));
+
+    for (let i = 1; i <= steps; i += 1) {
+      const t = i / steps;
+      const x = fromX + dx * t;
+      const y = fromY + dy * t;
+      const tx = Math.floor(x / TILE_SIZE);
+      const ty = Math.floor(y / TILE_SIZE);
+      if (!this.isWalkable(tx, ty)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private showRoomTitle(room?: Room): void {
@@ -695,6 +866,14 @@ class DungeonScene extends Phaser.Scene {
       }
     }
 
+    const doorHit = this.bossDoors.getChildren().some((child) => {
+      const door = child as Phaser.Physics.Arcade.Image;
+      return Math.abs(door.x - x) < TILE_SIZE * 0.75 && Math.abs(door.y - y) < TILE_SIZE * 0.75;
+    });
+    if (doorHit) {
+      return true;
+    }
+
     return false;
   }
 
@@ -772,13 +951,24 @@ class DungeonScene extends Phaser.Scene {
       const speedMultiplier = enemy.slowMs > 0 ? 0.55 : 1;
       const bossPhaseMultiplier = enemy.bossTier > 0 ? this.getBossPhaseMultiplier(enemy) : 1;
 
-      if (enemy.kind === "chaser" || enemy.kind === "splitter" || enemy.kind === "summoner") {
+      if (this.run.floor === 80 && enemy.roomId === this.layout.bossRoomId) {
+        enemy.setVelocity(0, 0);
+        if (enemy.fireCooldown <= 0) {
+          for (let i = 0; i < 3; i += 1) {
+            this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(-20 + i * 20));
+          }
+          enemy.fireCooldown = 900;
+        }
+      } else if (enemy.kind === "chaser" || enemy.kind === "splitter" || enemy.kind === "summoner") {
         enemy.setVelocity(direction.x * enemy.speed * speedMultiplier * bossPhaseMultiplier, direction.y * enemy.speed * speedMultiplier * bossPhaseMultiplier);
       } else if (enemy.kind === "shooter") {
         const desired = distance > 180 ? 1 : distance < 120 ? -1 : 0;
         enemy.setVelocity(direction.x * enemy.speed * desired * speedMultiplier, direction.y * enemy.speed * desired * speedMultiplier);
         if (enemy.fireCooldown <= 0) {
-          this.spawnEnemyProjectile(enemy);
+          const volley = this.run.floor === 100 && enemy.roomId === this.layout.bossRoomId ? 4 : 1;
+          for (let i = 0; i < volley; i += 1) {
+            this.spawnEnemyProjectile(enemy, volley === 1 ? 0 : Phaser.Math.DegToRad(-18 + i * 12));
+          }
           enemy.fireCooldown = Math.max(260, (enemy.bossTier > 0 ? BOSS_PROFILES[this.run.floor].fireCooldown : 900) - this.bossPhase * 70);
         }
       } else if (enemy.kind === "rusher") {
@@ -801,6 +991,9 @@ class DungeonScene extends Phaser.Scene {
     this.projectiles.children.iterate((child) => {
       const projectile = child as ProjectileSprite | null;
       if (!projectile || !projectile.active) return true;
+      if (projectile.specialEffects.includes("Homing")) {
+        this.applyProjectileHoming(projectile, 0.08);
+      }
       projectile.lifetimeMs -= delta;
       if (projectile.lifetimeMs <= 0) {
         projectile.destroy();
@@ -819,7 +1012,7 @@ class DungeonScene extends Phaser.Scene {
     });
   }
 
-  private spawnEnemyProjectile(enemy: EnemySprite): void {
+  private spawnEnemyProjectile(enemy: EnemySprite, spread = 0): void {
     const projectile = this.enemyProjectiles.create(enemy.x, enemy.y, "projectile") as ProjectileSprite;
     projectile.owner = "enemy";
     projectile.damage = 5 + this.run.floor * 0.4 + enemy.bossTier * 2;
@@ -830,7 +1023,12 @@ class DungeonScene extends Phaser.Scene {
     projectile.lifetimeMs = 1400;
     projectile.setScale(0.75);
     projectile.setTint(attributeColor(enemy.attribute));
-    this.physics.moveToObject(projectile, this.player, 220 + this.run.floor + enemy.bossTier * 18);
+    if (spread === 0) {
+      this.physics.moveToObject(projectile, this.player, 220 + this.run.floor + enemy.bossTier * 18);
+      return;
+    }
+    const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y) + spread;
+    this.physics.velocityFromRotation(angle, 220 + this.run.floor + enemy.bossTier * 18, (projectile.body as Phaser.Physics.Arcade.Body).velocity);
   }
 
   private spawnMinion(enemy: EnemySprite): void {
@@ -918,6 +1116,24 @@ class DungeonScene extends Phaser.Scene {
     this.spawnPlayerProjectile(next.x, next.y, []);
   }
 
+  private applyProjectileHoming(projectile: ProjectileSprite, turnRate: number): void {
+    const target = (this.enemies.getChildren() as EnemySprite[])
+      .filter((enemy) => enemy.active && enemy.activeRoom)
+      .sort((a, b) =>
+        Phaser.Math.Distance.Between(projectile.x, projectile.y, a.x, a.y) -
+        Phaser.Math.Distance.Between(projectile.x, projectile.y, b.x, b.y)
+      )[0];
+    if (!target || !projectile.body) {
+      return;
+    }
+    const body = projectile.body as Phaser.Physics.Arcade.Body;
+    const currentAngle = body.velocity.angle();
+    const desiredAngle = Phaser.Math.Angle.Between(projectile.x, projectile.y, target.x, target.y);
+    const nextAngle = Phaser.Math.Angle.RotateTo(currentAngle, desiredAngle, turnRate);
+    const speed = Math.max(1, body.velocity.length());
+    this.physics.velocityFromRotation(nextAngle, speed, body.velocity);
+  }
+
   private damageNearbyEnemies(x: number, y: number, damage: number, radius: number): void {
     (this.enemies.getChildren() as EnemySprite[]).forEach((enemy) => {
       if (!enemy.active) return;
@@ -934,10 +1150,16 @@ class DungeonScene extends Phaser.Scene {
     const gainedXp = 5 + Math.floor(this.run.floor / 2) + Math.floor(this.run.player.stats.A * 0.6);
     this.run.player.xp += gainedXp;
     if (Math.random() < 0.08 + this.run.player.stats.F * 0.01) {
-      this.run.player.wand = createRandomWand(this.run.floor + this.run.player.stats.F);
+      this.spawnWandDrop(enemy.x, enemy.y, createRandomWand(this.run.floor + this.run.player.stats.F));
     }
-    if (enemy.roomId === this.layout.bossRoomId) {
+    if (this.run.floor === 60 && (enemy.bossTag === "twin-fire" || enemy.bossTag === "twin-ice")) {
+      this.enrageRemainingTwin(enemy);
+    }
+    if (enemy.roomId === this.layout.bossRoomId && !enemy.isDecoy && !this.hasLivingBosses(enemy)) {
+      this.bossDoors.clear(true, true);
       this.stairs.setVisible(true);
+      this.spawnWandDrop(enemy.x + 18, enemy.y, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
+      this.showMessage("ボス撃破、階段が現れた");
       if (this.run.floor === 100) {
         this.scene.start("EndingScene");
         return;
@@ -949,6 +1171,31 @@ class DungeonScene extends Phaser.Scene {
     }
     enemy.destroy();
     this.checkLevelUp();
+  }
+
+  private hasLivingBosses(ignoring?: EnemySprite): boolean {
+    return (this.enemies.getChildren() as EnemySprite[]).some((enemy) =>
+      enemy.active &&
+      enemy !== ignoring &&
+      enemy.roomId === this.layout.bossRoomId &&
+      !enemy.isDecoy
+    );
+  }
+
+  private enrageRemainingTwin(deadTwin: EnemySprite): void {
+    const survivor = (this.enemies.getChildren() as EnemySprite[]).find((enemy) =>
+      enemy.active &&
+      enemy !== deadTwin &&
+      (enemy.bossTag === "twin-fire" || enemy.bossTag === "twin-ice")
+    );
+    if (!survivor) {
+      return;
+    }
+    survivor.hp = Math.min(survivor.maxHp * 1.4, survivor.hp + survivor.maxHp * 0.3);
+    survivor.maxHp *= 1.25;
+    survivor.speed *= 1.2;
+    survivor.setScale(survivor.scaleX * 1.1);
+    this.showMessage("片割れが激昂して強化された");
   }
 
   private checkLevelUp(): void {
@@ -1031,9 +1278,20 @@ class DungeonScene extends Phaser.Scene {
 
   private onLootChest(_: Phaser.GameObjects.GameObject, chestObj: Phaser.GameObjects.GameObject): void {
     const chest = chestObj as Phaser.Physics.Arcade.Image;
-    this.run.player.wand = createRandomWand(this.run.floor + 4 + this.run.player.stats.F);
+    this.spawnWandDrop(chest.x, chest.y, createRandomWand(this.run.floor + 4 + this.run.player.stats.F));
     this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + 8);
+    this.showMessage("宝箱からワンドが落ちた");
     chest.destroy();
+  }
+
+  private onCollectLoot(_: Phaser.GameObjects.GameObject, lootObject: Phaser.GameObjects.GameObject): void {
+    const loot = lootObject as LootSprite;
+    if (!loot.active) {
+      return;
+    }
+    this.run.player.wand = loot.wand;
+    this.showMessage(`${loot.wand.rarity} ${loot.wand.name}`);
+    loot.destroy();
   }
 
   private onReachStairs(): void {
@@ -1202,6 +1460,15 @@ class DungeonScene extends Phaser.Scene {
   private showMessage(message: string): void {
     this.messageText.setText(message);
     this.messageText.setAlpha(1);
+  }
+
+  private spawnWandDrop(x: number, y: number, wand: Wand): void {
+    const loot = this.lootDrops.create(x, y, "wand-drop") as LootSprite;
+    loot.lootType = "wand";
+    loot.wand = wand;
+    loot.setTint(attributeColor(wand.attribute));
+    loot.setScale(1 + rarityValue(wand.rarity) * 0.06);
+    loot.setDepth(2);
   }
 }
 
