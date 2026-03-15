@@ -151,4 +151,49 @@ describe("E2E: Game boot and play", () => {
     }
     expect(activeSetFalse).toEqual([]);
   }, 60000);
+
+  it("stairs confirm cancel button works", async () => {
+    consoleLogs.length = 0;
+    consoleErrors.length = 0;
+
+    await page.goto(baseUrl);
+    await page.waitForSelector("canvas", { timeout: 10000 });
+    await page.waitForTimeout(1000);
+    await pressKey("Space");
+    await page.waitForTimeout(2000);
+
+    // Expose a test helper to teleport player to stairs and open the dialog
+    await page.evaluate(() => {
+      const game = (window as unknown as { game?: Phaser.Game }).game;
+      if (!game) return;
+      const dungeon = game.scene.getScene("DungeonScene") as unknown as {
+        player: { x: number; y: number };
+        stairs: { x: number; y: number; visible: boolean };
+        scene: Phaser.Scenes.ScenePlugin;
+        run: { floor: number };
+      };
+      if (!dungeon) return;
+      // Force stairs visible and launch confirm dialog directly
+      dungeon.stairs.visible = true;
+      dungeon.scene.pause();
+      dungeon.scene.launch("StairsConfirmScene", {
+        floor: dungeon.run.floor,
+        onDescend: () => { console.log("TEST:descended"); dungeon.scene.resume(); },
+        onCancel: () => { console.log("TEST:cancelled"); dungeon.scene.resume(); }
+      });
+    });
+
+    await page.waitForTimeout(500);
+
+    // Click the "戻る" button (right side of dialog, roughly panel.x + 60)
+    // Game is 540x960, panel is centered, "戻る" button at panel.x+60 = 330
+    await clickCanvas(330, 520);
+    await page.waitForTimeout(500);
+
+    const cancelled = consoleLogs.filter((l) => l.includes("TEST:cancelled"));
+    const descended = consoleLogs.filter((l) => l.includes("TEST:descended"));
+    console.log(`Cancel clicks: ${cancelled.length}, Descend clicks: ${descended.length}`);
+    expect(cancelled.length).toBeGreaterThan(0);
+    expect(descended.length).toBe(0);
+  }, 20000);
 });

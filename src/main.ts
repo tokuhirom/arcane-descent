@@ -16,4 +16,4 @@ document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.body.style.overscrollBehavior = "none";
 document.body.style.touchAction = "none";
 
-createGame("app");
+(window as unknown as Record<string, unknown>).game = createGame("app");
