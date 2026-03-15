@@ -371,8 +371,7 @@ class StairsConfirmScene extends Phaser.Scene {
   }
 
   create(data: { floor: number; onDescend: () => void; onCancel: () => void }): void {
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6)
-      .setInteractive();
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6);
     const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 380, 160, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0xf4d35e);
 
@@ -381,15 +380,13 @@ class StairsConfirmScene extends Phaser.Scene {
 
     const yesBtn = this.add.rectangle(panel.x - 60, panel.y + 40, 110, 36, 0x3a254f, 1)
       .setInteractive({ useHandCursor: true })
-      .setStrokeStyle(1, 0xf4d35e)
-      .setDepth(1);
-    makeText(this, panel.x - 90, panel.y + 30, "進む", 20, "#f4d35e").setDepth(1);
+      .setStrokeStyle(1, 0xf4d35e);
+    makeText(this, panel.x - 90, panel.y + 30, "進む", 20, "#f4d35e");
 
     const noBtn = this.add.rectangle(panel.x + 60, panel.y + 40, 110, 36, 0x241734, 1)
       .setInteractive({ useHandCursor: true })
-      .setStrokeStyle(1, 0x9d4edd)
-      .setDepth(1);
-    makeText(this, panel.x + 30, panel.y + 30, "戻る", 20, "#cdb4db").setDepth(1);
+      .setStrokeStyle(1, 0x9d4edd);
+    makeText(this, panel.x + 30, panel.y + 30, "戻る", 20, "#cdb4db");
 
     const descend = () => {
       this.scene.stop();
@@ -413,8 +410,7 @@ class WandCompareScene extends Phaser.Scene {
   }
 
   create(data: { current: Wand; found: Wand; onEquip: () => void; onSkip: () => void }): void {
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6)
-      .setInteractive();
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6);
     const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 340, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
 
@@ -438,15 +434,13 @@ class WandCompareScene extends Phaser.Scene {
 
     const equipBtn = this.add.rectangle(panel.x - 70, panel.y + 130, 140, 40, 0x3a254f, 1)
       .setInteractive({ useHandCursor: true })
-      .setStrokeStyle(1, 0xf4d35e)
-      .setDepth(1);
-    makeText(this, panel.x - 115, panel.y + 118, "装備する", 20, "#f4d35e").setDepth(1);
+      .setStrokeStyle(1, 0xf4d35e);
+    makeText(this, panel.x - 115, panel.y + 118, "装備する", 20, "#f4d35e");
 
     const skipBtn = this.add.rectangle(panel.x + 80, panel.y + 130, 140, 40, 0x241734, 1)
       .setInteractive({ useHandCursor: true })
-      .setStrokeStyle(1, 0x9d4edd)
-      .setDepth(1);
-    makeText(this, panel.x + 35, panel.y + 118, "捨てる", 20, "#cdb4db").setDepth(1);
+      .setStrokeStyle(1, 0x9d4edd);
+    makeText(this, panel.x + 35, panel.y + 118, "捨てる", 20, "#cdb4db");
 
     const equip = () => { this.scene.stop(); data.onEquip(); };
     const skip = () => { this.scene.stop(); data.onSkip(); };
