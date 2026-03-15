@@ -9,6 +9,9 @@ import {
   generateDungeon
 } from "./dungeon";
 
+declare const __BUILD_TIME_JST__: string;
+declare const __COMMIT_HASH__: string;
+
 type FogState = 0 | 1 | 2;
 type Rarity = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary";
 type SpecialEffect = "Multishot" | "Homing" | "Explosion" | "Chain" | "Lifesteal";
@@ -272,6 +275,46 @@ class BootScene extends Phaser.Scene {
     g.generateTexture("door-block", TILE_SIZE, TILE_SIZE);
     g.destroy();
 
+    this.scene.start("TitleScene");
+  }
+}
+
+class TitleScene extends Phaser.Scene {
+  constructor() {
+    super("TitleScene");
+  }
+
+  create(): void {
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x0a0812, 0.96);
+    this.add.ellipse(GAME_WIDTH / 2, 180, 360, 180, 0x241734, 0.8);
+    this.add.ellipse(GAME_WIDTH / 2, 220, 260, 120, 0x3d1f52, 0.7);
+
+    makeText(this, 56, 160, "Arcane", 46, "#f4d35e");
+    makeText(this, 56, 214, "Descent", 58, "#f8f1ff");
+    makeText(this, 56, 320, "ローグライト / ダンジョン探索", 22, "#cdb4db");
+    makeText(this, 56, 362, "移動のみ。弾は自動射撃。", 20, "#d9d9ff");
+
+    const startButton = this.add.rectangle(GAME_WIDTH / 2, 560, 300, 64, 0x241734, 1)
+      .setStrokeStyle(2, 0xf4d35e)
+      .setInteractive({ useHandCursor: true });
+    makeText(this, GAME_WIDTH / 2 - 72, 540, "Start Descent", 28, "#fff2b2");
+    startButton.on("pointerdown", () => this.startRun());
+
+    makeText(this, 56, 650, `Build: ${__BUILD_TIME_JST__}`, 16, "#9ad1ff");
+    makeText(this, 56, 676, `Commit: ${__COMMIT_HASH__}`, 16, "#9ad1ff");
+    makeText(this, 56, 760, "PC: WASD / Arrow Keys", 18, "#f8f1ff");
+    makeText(this, 56, 788, "Mobile: Virtual Joystick", 18, "#f8f1ff");
+    makeText(this, 56, 860, "Tap or press SPACE / ENTER", 20, "#fff2b2");
+
+    this.input.once("pointerdown", () => this.startRun());
+    this.input.keyboard?.once("keydown-SPACE", () => this.startRun());
+    this.input.keyboard?.once("keydown-ENTER", () => this.startRun());
+  }
+
+  private startRun(): void {
+    if (this.scene.isActive("DungeonScene")) {
+      this.scene.stop("DungeonScene");
+    }
     this.scene.start("DungeonScene", createStarterState());
   }
 }
@@ -334,7 +377,7 @@ class GameOverScene extends Phaser.Scene {
     this.input.keyboard?.once("keydown-R", () => {
       this.scene.stop();
       this.scene.stop("DungeonScene");
-      this.scene.start("BootScene");
+      this.scene.start("TitleScene");
     });
   }
 }
@@ -353,7 +396,7 @@ class EndingScene extends Phaser.Scene {
     this.input.keyboard?.once("keydown-R", () => {
       this.scene.stop();
       this.scene.stop("DungeonScene");
-      this.scene.start("BootScene");
+      this.scene.start("TitleScene");
     });
   }
 }
@@ -1508,7 +1551,7 @@ export function createGame(container: string): Phaser.Game {
         debug: false
       }
     },
-    scene: [BootScene, DungeonScene, LevelUpScene, BossIntroScene, GameOverScene, EndingScene],
+    scene: [BootScene, TitleScene, DungeonScene, LevelUpScene, BossIntroScene, GameOverScene, EndingScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
