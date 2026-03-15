@@ -1565,6 +1565,13 @@ class DungeonScene extends Phaser.Scene {
     if (!this.isDying) {
       this.player.setVisible(true);
       this.player.setAlpha(this.run.player.hitInvulnMs > 0 ? 0.5 : 1);
+      if (!this.player.active || isNaN(this.player.x) || isNaN(this.player.y)) {
+        console.error(`Player broken: active=${this.player.active} x=${this.player.x} y=${this.player.y}`);
+        this.player.setPosition(this.layout.start.x * TILE_SIZE, this.layout.start.y * TILE_SIZE);
+        this.player.setActive(true);
+        this.showMessage("WARN: player reset");
+      }
+      this.player.setDepth(3);
     }
     if (this.run.player.thunderMs > 0) {
       this.player.setTint(0xffd166);
@@ -1708,7 +1715,10 @@ class DungeonScene extends Phaser.Scene {
         statuses.push(`Boss HP ${Math.ceil(boss.hp)}/${Math.ceil(boss.maxHp)} P${this.bossPhase}`);
       }
     }
-    this.statusText.setText(statuses.join("  ") || "Status: Normal");
+    if (!this.player.visible) statuses.push("!VIS");
+    if (!this.player.active) statuses.push("!ACT");
+    if (this.isDying) statuses.push("DYING");
+    this.statusText.setText(statuses.join("  ") || "Normal");
     this.statusText.setColor(
       this.run.player.thunderMs > 0 ? "#ffd166" :
       this.run.player.burnMs > 0 ? "#ff8c69" :
