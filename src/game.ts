@@ -62,6 +62,7 @@ interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
   splitDepth: number;
   bossTag?: string;
   isDecoy?: boolean;
+  bossAbilityCd: number;
 }
 
 interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
@@ -275,6 +276,21 @@ class BootScene extends Phaser.Scene {
     g.fillStyle(0xd7263d, 1);
     g.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
     g.generateTexture("door-block", TILE_SIZE, TILE_SIZE);
+    g.clear();
+
+    g.fillStyle(0xff6b35, 0.7);
+    g.fillCircle(8, 8, 7);
+    g.generateTexture("hazard-fire", 16, 16);
+    g.clear();
+
+    g.fillStyle(0x80ed99, 0.7);
+    g.fillCircle(8, 8, 7);
+    g.generateTexture("hazard-poison", 16, 16);
+    g.clear();
+
+    g.fillStyle(0x7bdff2, 0.9);
+    g.fillRect(0, 0, 14, 14);
+    g.generateTexture("ice-pillar", 14, 14);
     g.destroy();
 
     this.scene.start("TitleScene");
@@ -521,6 +537,8 @@ class DungeonScene extends Phaser.Scene {
   private chests!: Phaser.Physics.Arcade.StaticGroup;
   private lootDrops!: Phaser.Physics.Arcade.Group;
   private bossDoors!: Phaser.Physics.Arcade.StaticGroup;
+  private hazards!: Phaser.Physics.Arcade.Group;
+  private icePillars!: Phaser.Physics.Arcade.StaticGroup;
   private stairs!: Phaser.Physics.Arcade.Image;
   private fireTimer = 0;
   private fog: FogState[][] = [];
@@ -567,6 +585,8 @@ class DungeonScene extends Phaser.Scene {
     this.chests = this.physics.add.staticGroup();
     this.lootDrops = this.physics.add.group();
     this.bossDoors = this.physics.add.staticGroup();
+    this.hazards = this.physics.add.group();
+    this.icePillars = this.physics.add.staticGroup();
 
     this.layout = generateDungeon(this.run.floor);
     this.fog = Array.from({ length: this.layout.height }, () =>
@@ -618,6 +638,9 @@ class DungeonScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.chests, safeCallback(this.onLootChest), undefined, this);
     this.physics.add.overlap(this.player, this.lootDrops, safeCallback(this.onCollectLoot), undefined, this);
     this.physics.add.overlap(this.player, this.stairs, safeCallback(this.onReachStairs), undefined, this);
+    this.physics.add.overlap(this.player, this.hazards, safeCallback(this.onPlayerTouchesHazard), undefined, this);
+    this.physics.add.collider(this.player, this.icePillars);
+    this.physics.add.collider(this.enemies, this.icePillars);
 
     if (this.run.floor % 10 === 0) {
       this.scene.launch("BossIntroScene", { floor: this.run.floor });
@@ -733,6 +756,7 @@ class DungeonScene extends Phaser.Scene {
       enemy.touchCooldown = 0;
       enemy.bossTier = bossProfile ? Math.max(1, Math.floor(this.run.floor / 10)) : 0;
       enemy.splitDepth = enemy.kind === "splitter" ? 1 : 0;
+      enemy.bossAbilityCd = 0;
       enemy.bossTag = bossProfile ? `boss-${this.run.floor}` : undefined;
       enemy.isDecoy = false;
       enemy.setDepth(3);
@@ -796,6 +820,7 @@ class DungeonScene extends Phaser.Scene {
       twin.touchCooldown = 0;
       twin.bossTier = boss.bossTier;
       twin.splitDepth = 0;
+      twin.bossAbilityCd = 0;
       twin.bossTag = "twin-ice";
       twin.isDecoy = false;
       twin.setDepth(3);
@@ -834,6 +859,7 @@ class DungeonScene extends Phaser.Scene {
         decoy.touchCooldown = 0;
         decoy.bossTier = boss.bossTier;
         decoy.splitDepth = 0;
+        decoy.bossAbilityCd = 0;
         decoy.bossTag = "shadow-decoy";
         decoy.isDecoy = true;
         decoy.setDepth(3);
@@ -1136,6 +1162,7 @@ class DungeonScene extends Phaser.Scene {
 
       enemy.fireCooldown -= delta;
       enemy.summonCooldown -= delta;
+      enemy.bossAbilityCd -= delta;
       const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
       const direction = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize();
       const speedMultiplier = enemy.slowMs > 0 ? 0.55 : 1;
@@ -1155,11 +1182,16 @@ class DungeonScene extends Phaser.Scene {
         const desired = distance > 180 ? 1 : distance < 120 ? -1 : 0;
         this.safeSetVelocity(enemy,direction.x * enemy.speed * desired * speedMultiplier, direction.y * enemy.speed * desired * speedMultiplier);
         if (enemy.fireCooldown <= 0) {
-          const volley = this.run.floor === 100 && enemy.roomId === this.layout.bossRoomId ? 4 : 1;
+          const isF70Boss = this.run.floor === 70 && enemy.roomId === this.layout.bossRoomId;
+          const volley = this.run.floor === 100 && enemy.roomId === this.layout.bossRoomId ? 4 : isF70Boss ? 3 : 1;
           for (let i = 0; i < volley; i += 1) {
-            this.spawnEnemyProjectile(enemy, volley === 1 ? 0 : Phaser.Math.DegToRad(-18 + i * 12));
+            const spread = volley === 1 ? 0
+              : isF70Boss ? Phaser.Math.DegToRad(-15 + i * 15)
+              : Phaser.Math.DegToRad(-18 + i * 12);
+            this.spawnEnemyProjectile(enemy, spread);
           }
-          enemy.fireCooldown = Math.max(260, (enemy.bossTier > 0 ? BOSS_PROFILES[this.run.floor].fireCooldown : 900) - this.bossPhase * 70);
+          const baseCd = enemy.bossTier > 0 ? BOSS_PROFILES[this.run.floor].fireCooldown : 900;
+          enemy.fireCooldown = Math.max(260, (isF70Boss ? baseCd * 0.7 : baseCd) - this.bossPhase * 70);
         }
       } else if (enemy.kind === "rusher") {
         const speed = distance < 120 ? enemy.speed * 2.4 : enemy.speed * 0.7;
@@ -1172,6 +1204,11 @@ class DungeonScene extends Phaser.Scene {
           this.spawnMinion(enemy);
         }
         enemy.summonCooldown = Math.max(1100, 3200 - enemy.bossTier * 180);
+      }
+
+      // Boss-specific abilities
+      if (enemy.bossTier > 0 && enemy.roomId === this.layout.bossRoomId && enemy.bossAbilityCd <= 0) {
+        this.updateBossAbility(enemy);
       }
 
       this.resolveWallCollision(enemy);
@@ -1245,7 +1282,121 @@ class DungeonScene extends Phaser.Scene {
     minion.touchCooldown = 0;
     minion.bossTier = 0;
     minion.splitDepth = 0;
+    minion.bossAbilityCd = 0;
     minion.setCircle(8);
+  }
+
+  private updateBossAbility(enemy: EnemySprite): void {
+    const floor = this.run.floor;
+
+    if (floor === 10) {
+      // F10 "炎の魔獣" - fire trail
+      this.spawnGroundHazard(enemy.x, enemy.y, "Fire", 3000);
+      enemy.bossAbilityCd = 600;
+    } else if (floor === 20) {
+      // F20 "氷の巨人" - ice pillars near player
+      this.spawnIcePillar(
+        this.player.x + Phaser.Math.Between(-60, 60),
+        this.player.y + Phaser.Math.Between(-60, 60),
+        4000
+      );
+      enemy.bossAbilityCd = 2500;
+    } else if (floor === 30) {
+      // F30 "雷の鳥" - omni-directional lightning
+      const directions = 12;
+      for (let i = 0; i < directions; i += 1) {
+        this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / directions)));
+      }
+      enemy.bossAbilityCd = 2200;
+    } else if (floor === 40) {
+      // F40 "毒の蜘蛛" - poison swamp near player
+      this.spawnGroundHazard(
+        this.player.x + Phaser.Math.Between(-40, 40),
+        this.player.y + Phaser.Math.Between(-40, 40),
+        "Poison",
+        4000
+      );
+      enemy.bossAbilityCd = 1800;
+    } else if (floor === 100 && this.bossPhase >= 3) {
+      // F100 "深淵の王" phase 3 - edge projectiles
+      this.spawnEdgeProjectiles(enemy);
+      enemy.bossAbilityCd = 3000;
+    } else {
+      // No special ability for this floor; prevent re-checking every frame
+      enemy.bossAbilityCd = 5000;
+    }
+  }
+
+  private spawnGroundHazard(x: number, y: number, attribute: Attribute, duration: number): void {
+    const textureKey = attribute === "Fire" ? "hazard-fire" : "hazard-poison";
+    const hazard = this.hazards.create(x, y, textureKey) as Phaser.Physics.Arcade.Image & { hazardAttribute: Attribute; hazardCooldown: number };
+    hazard.hazardAttribute = attribute;
+    hazard.hazardCooldown = 0;
+    hazard.setDepth(1);
+    hazard.setAlpha(0.8);
+    if (hazard.body) {
+      (hazard.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      hazard.setImmovable(true);
+      (hazard.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    }
+    this.time.delayedCall(duration, () => {
+      if (hazard.active) hazard.destroy();
+    });
+  }
+
+  private onPlayerTouchesHazard(_playerObj: Phaser.GameObjects.GameObject, hazardObj: Phaser.GameObjects.GameObject): void {
+    const hazard = hazardObj as Phaser.Physics.Arcade.Image & { hazardAttribute: Attribute; hazardCooldown: number };
+    if (!hazard.active || hazard.hazardCooldown > 0) {
+      return;
+    }
+    hazard.hazardCooldown = 500;
+    this.time.delayedCall(500, () => {
+      if (hazard.active) hazard.hazardCooldown = 0;
+    });
+    const damage = 4 + this.run.floor * 0.2;
+    this.damagePlayer(damage, hazard.hazardAttribute, false, hazard.hazardAttribute === "Fire" ? "炎の地面" : "毒の沼");
+  }
+
+  private spawnIcePillar(x: number, y: number, duration: number): void {
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    if (!this.isWalkable(tx, ty)) return;
+
+    const pillar = this.icePillars.create(tx * TILE_SIZE + TILE_SIZE / 2, ty * TILE_SIZE + TILE_SIZE / 2, "ice-pillar") as Phaser.Physics.Arcade.Image;
+    pillar.setDepth(2);
+    pillar.setTint(0x7bdff2);
+    pillar.refreshBody();
+    this.time.delayedCall(duration, () => {
+      if (pillar.active) pillar.destroy();
+    });
+  }
+
+  private spawnEdgeProjectiles(enemy: EnemySprite): void {
+    const bossRoom = this.layout.rooms.find((r) => r.id === this.layout.bossRoomId);
+    if (!bossRoom) return;
+    const cx = (bossRoom.x + bossRoom.width / 2) * TILE_SIZE;
+    const cy = (bossRoom.y + bossRoom.height / 2) * TILE_SIZE;
+    const count = 8;
+    for (let i = 0; i < count; i += 1) {
+      const angle = (Math.PI * 2 * i) / count;
+      const radius = Math.max(bossRoom.width, bossRoom.height) * TILE_SIZE * 0.45;
+      const sx = cx + Math.cos(angle) * radius;
+      const sy = cy + Math.sin(angle) * radius;
+      const projectile = this.enemyProjectiles.create(sx, sy, "projectile") as ProjectileSprite;
+      projectile.owner = "enemy";
+      projectile.damage = 6 + this.run.floor * 0.3;
+      projectile.piercing = 1;
+      projectile.attribute = ATTRIBUTES[i % ATTRIBUTES.length];
+      projectile.specialEffects = [];
+      projectile.chainHits = 0;
+      projectile.lifetimeMs = 2400;
+      projectile.setScale(0.85);
+      projectile.setTint(attributeColor(projectile.attribute));
+      if (projectile.body) {
+        const toCenter = new Phaser.Math.Vector2(cx - sx, cy - sy).normalize();
+        (projectile.body as Phaser.Physics.Arcade.Body).setVelocity(toCenter.x * 180, toCenter.y * 180);
+      }
+    }
   }
 
   private onProjectileHitsEnemy(projectileObj: Phaser.GameObjects.GameObject, enemyObj: Phaser.GameObjects.GameObject): void {
@@ -1274,6 +1425,23 @@ class DungeonScene extends Phaser.Scene {
 
     enemy.hp -= damage;
     projectile.piercing -= 1;
+
+    // F50 "無属性の騎士" - reflect chance
+    if (this.run.floor === 50 && enemy.roomId === this.layout.bossRoomId && enemy.bossTier > 0 && Math.random() < 0.3) {
+      const reflected = this.enemyProjectiles.create(enemy.x, enemy.y, "projectile") as ProjectileSprite;
+      reflected.owner = "enemy";
+      reflected.damage = projectile.damage * 0.6;
+      reflected.piercing = 1;
+      reflected.attribute = "None";
+      reflected.specialEffects = [];
+      reflected.chainHits = 0;
+      reflected.lifetimeMs = 1200;
+      reflected.setScale(0.7);
+      reflected.setTint(0xf8f1ff);
+      if (reflected.body) {
+        this.physics.moveToObject(reflected, this.player, 260);
+      }
+    }
 
     if (projectile.specialEffects.includes("Explosion")) {
       this.damageNearbyEnemies(enemy.x, enemy.y, damage * 0.35, 42);
