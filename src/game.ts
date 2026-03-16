@@ -837,6 +837,8 @@ class PauseScene extends Phaser.Scene {
 
     const resume = () => {
       this.scene.stop();
+      const dungeon = this.scene.get("DungeonScene") as DungeonScene;
+      dungeon.physics.resume();
       this.scene.resume("DungeonScene");
     };
 
@@ -1113,7 +1115,13 @@ class DungeonScene extends Phaser.Scene {
 
   private pauseWithJoystickReset(): void {
     this.resetJoystick();
+    this.physics.pause();
     this.scene.pause();
+  }
+
+  private resumeFromPause(): void {
+    this.physics.resume();
+    this.scene.resume();
   }
 
   private updateJoystick(pointer: Phaser.Input.Pointer): void {
@@ -1355,6 +1363,10 @@ class DungeonScene extends Phaser.Scene {
     const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
     const near = distance <= TILE_SIZE * 8;
     const visible = distance <= TILE_SIZE * 14 && this.hasLineOfSight(enemy.x, enemy.y, this.player.x, this.player.y);
+    // Once engaged, keep chasing until far away
+    if (enemy.activeRoom && distance <= TILE_SIZE * 20) {
+      return true;
+    }
     return sameRoom || near || visible;
   }
 
@@ -2300,7 +2312,7 @@ class DungeonScene extends Phaser.Scene {
         },
         onClose: () => {
           this.run.player.hitInvulnMs = 500;
-          this.scene.resume();
+          this.resumeFromPause();
         }
       });
     }
@@ -2447,12 +2459,12 @@ class DungeonScene extends Phaser.Scene {
         this.run.player.weapon = foundWeapon;
         this.showMessage(`${foundWeapon.rarity} ${foundWeapon.name} を装備した`);
         loot.destroy();
-        this.scene.resume();
+        this.resumeFromPause();
       },
       onSkip: () => {
         this.showMessage(`${foundWeapon.name} を捨てた`);
         loot.destroy();
-        this.scene.resume();
+        this.resumeFromPause();
       }
     });
   }
@@ -2476,7 +2488,7 @@ class DungeonScene extends Phaser.Scene {
       },
       onCancel: () => {
         this.stairsCooldown = 1000;
-        this.scene.resume();
+        this.resumeFromPause();
       }
     });
   }
@@ -2894,12 +2906,12 @@ class DungeonScene extends Phaser.Scene {
         this.run.player.armor = drop.armor;
         this.showMessage(`${drop.armor.rarity} ${drop.armor.name} を装備した`);
         drop.destroy();
-        this.scene.resume();
+        this.resumeFromPause();
       },
       onSkip: () => {
         this.showMessage(`${drop.armor.name} を捨てた`);
         drop.destroy();
-        this.scene.resume();
+        this.resumeFromPause();
       }
     });
   }

@@ -196,20 +196,6 @@ function createBossFloor(tiles: TileTypeValue[][], floor: number): DungeonLayout
         roomId: 2,
         kind: floor === 100 ? "summoner" : pickEnemyKind(floor),
         elite: true
-      },
-      {
-        x: 23.5,
-        y: 17.5,
-        roomId: 1,
-        kind: pickEnemyKind(Math.max(1, floor - 5)),
-        elite: floor >= 81 && Math.random() < 0.3
-      },
-      {
-        x: 25.5,
-        y: 19.5,
-        roomId: 1,
-        kind: pickEnemyKind(floor),
-        elite: floor >= 81 && Math.random() < 0.3
       }
     ],
     bossRoomId: 2
