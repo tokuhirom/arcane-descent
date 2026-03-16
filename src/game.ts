@@ -1030,7 +1030,7 @@ class DungeonScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown-P", () => {
       if (!this.scene.isPaused()) {
-        this.scene.pause();
+        this.pauseWithJoystickReset();
         this.scene.launch("PauseScene");
       }
     });
@@ -1056,7 +1056,7 @@ class DungeonScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
     this.pauseButton.on("pointerdown", () => {
-      this.scene.pause();
+      this.pauseWithJoystickReset();
       this.scene.launch("PauseScene");
     });
     this.syncUi();
@@ -1101,6 +1101,18 @@ class DungeonScene extends Phaser.Scene {
       this.joystickBase?.setVisible(false);
       this.joystickThumb?.setVisible(false);
     });
+  }
+
+  private resetJoystick(): void {
+    this.joystickPointer = undefined;
+    this.joystickVector.set(0, 0);
+    this.joystickBase?.setVisible(false);
+    this.joystickThumb?.setVisible(false);
+  }
+
+  private pauseWithJoystickReset(): void {
+    this.resetJoystick();
+    this.scene.pause();
   }
 
   private updateJoystick(pointer: Phaser.Input.Pointer): void {
@@ -2262,7 +2274,7 @@ class DungeonScene extends Phaser.Scene {
     }
 
     if (this.run.player.statPoints > 0 && !this.scene.isActive("LevelUpScene")) {
-      this.scene.pause();
+      this.pauseWithJoystickReset();
       this.scene.launch("LevelUpScene", {
         stats: this.run.player.stats,
         onPick: (key: StatKey) => {
@@ -2386,7 +2398,7 @@ class DungeonScene extends Phaser.Scene {
         level: this.run.player.level,
         cause
       });
-      this.scene.pause();
+      this.pauseWithJoystickReset();
     });
   }
 
@@ -2411,7 +2423,7 @@ class DungeonScene extends Phaser.Scene {
     }
     loot.disableBody(true, false);
     const foundWeapon: Weapon = loot.lootType === "melee" ? loot.melee : loot.wand;
-    this.scene.pause();
+    this.pauseWithJoystickReset();
     this.scene.launch("WeaponCompareScene", {
       current: this.run.player.weapon,
       found: foundWeapon,
@@ -2441,7 +2453,7 @@ class DungeonScene extends Phaser.Scene {
       return;
     }
     sfx.play("stairs");
-    this.scene.pause();
+    this.pauseWithJoystickReset();
     this.scene.launch("StairsConfirmScene", {
       floor: this.run.floor,
       onDescend: () => {
@@ -2860,7 +2872,7 @@ class DungeonScene extends Phaser.Scene {
       return;
     }
     drop.disableBody(true, false);
-    this.scene.pause();
+    this.pauseWithJoystickReset();
     this.scene.launch("ArmorCompareScene", {
       current: this.run.player.armor,
       found: drop.armor,
