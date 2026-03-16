@@ -86,7 +86,7 @@ const BOSS_MULTIPLIERS: Record<number, number> = {
 
 function bossHp(floor: number): number {
   const mult = BOSS_MULTIPLIERS[floor] ?? 1;
-  return (18 + floor * 2 + 24) * mult; // elite = true for bosses
+  return (30 + floor * 3 + 30) * mult; // elite = true for bosses
 }
 
 // ---- Enemy XP ----

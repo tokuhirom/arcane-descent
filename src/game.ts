@@ -221,7 +221,7 @@ function createStarterState(): RunState {
         S: 4,
         T: 4
       },
-      weapon: { type: "melee" as const, name: "錆びた剣", attribute: "None" as Attribute, rarity: "Common" as Rarity, damage: 10, range: 44, swingRate: 500, arc: 120, specialEffects: [] },
+      weapon: { type: "melee" as const, name: "錆びた剣", attribute: "None" as Attribute, rarity: "Common" as Rarity, damage: 6, range: 44, swingRate: 500, arc: 120, specialEffects: [] },
       armor: createDefaultArmor(),
       burnMs: 0,
       iceMs: 0,
@@ -330,7 +330,7 @@ function createRandomMelee(floor: number, style?: MeleeStyle): MeleeWeapon {
 
   if (meleeStyle === "spear") {
     // 槍: 長射程・狭角・低ダメージ・速い振り
-    baseDamage = (8 + floor * 0.7 + rarityIndex * 4) * (hasMultishot ? 0.5 : 1);
+    baseDamage = (6 + floor * 0.5 + rarityIndex * 3) * (hasMultishot ? 0.5 : 1);
     range = 72 + rarityIndex * 8;
     arc = hasMultishot ? 120 : 30;
     swingRate = Math.max(200, 450 - floor * 2 - rarityIndex * 35);
@@ -338,7 +338,7 @@ function createRandomMelee(floor: number, style?: MeleeStyle): MeleeWeapon {
     weaponName = hasMultishot ? spearNames[Phaser.Math.Between(0, 2)] : `${attrLabel}の${spearNames[Phaser.Math.Between(0, 2)]}`;
   } else {
     // 剣: 短射程・広角・高ダメージ
-    baseDamage = (12 + floor * 1.0 + rarityIndex * 6) * (hasMultishot ? 0.5 : 1);
+    baseDamage = (8 + floor * 0.7 + rarityIndex * 4) * (hasMultishot ? 0.5 : 1);
     range = 48 + rarityIndex * 6;
     arc = hasMultishot ? 360 : 120;
     swingRate = Math.max(250, 550 - floor * 2 - rarityIndex * 40);
@@ -1143,7 +1143,7 @@ class DungeonScene extends Phaser.Scene {
       enemy.attribute = bossProfile?.attribute ?? pick(ATTRIBUTES);
       enemy.weakness = pick(ATTRIBUTES);
       enemy.resistance = pick(ATTRIBUTES);
-      enemy.maxHp = (18 + this.run.floor * 2 + (spawn.elite ? 24 : 0)) * (bossProfile?.maxHpMultiplier ?? 1) * (enemy.kind === "guardian" || enemy.kind === "shielder" ? 1.5 : 1);
+      enemy.maxHp = (30 + this.run.floor * 3 + (spawn.elite ? 30 : 0)) * (bossProfile?.maxHpMultiplier ?? 1) * (enemy.kind === "guardian" || enemy.kind === "shielder" ? 1.5 : 1);
       enemy.hp = enemy.maxHp;
       enemy.speed = (50 + this.run.floor * 1.2 + (enemy.kind === "rusher" ? 25 : 0) + (enemy.kind === "guardian" ? -10 : 0) + (spawn.elite ? 22 : 0)) * (bossProfile?.speedMultiplier ?? 1);
       enemy.burnMs = 0;
