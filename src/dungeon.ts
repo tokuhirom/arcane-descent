@@ -77,10 +77,137 @@ function overlaps(a: Room, b: Room): boolean {
   );
 }
 
+function carveRect(tiles: TileTypeValue[][], rx: number, ry: number, rw: number, rh: number): void {
+  for (let y = ry; y < ry + rh; y += 1) {
+    for (let x = rx; x < rx + rw; x += 1) {
+      if (tiles[y]?.[x] !== undefined) {
+        tiles[y][x] = TileType.Floor;
+      }
+    }
+  }
+}
+
 function carveRoom(tiles: TileTypeValue[][], room: Room): void {
-  for (let y = room.y; y < room.y + room.height; y += 1) {
-    for (let x = room.x; x < room.x + room.width; x += 1) {
-      tiles[y][x] = TileType.Floor;
+  carveRect(tiles, room.x, room.y, room.width, room.height);
+}
+
+function carveRoomVariant(tiles: TileTypeValue[][], room: Room): void {
+  const roll = nextRng();
+
+  if (roll < 0.4) {
+    // Rectangle (40%)
+    carveRect(tiles, room.x, room.y, room.width, room.height);
+  } else if (roll < 0.6) {
+    // L-shape (20%): main rect + smaller rect on one side
+    const halfW = Math.floor(room.width / 2);
+    const halfH = Math.floor(room.height / 2);
+    const side = Math.floor(nextRng() * 4);
+    if (side === 0) {
+      // Main top-left, extension bottom-right
+      carveRect(tiles, room.x, room.y, room.width, halfH);
+      carveRect(tiles, room.x + halfW, room.y + halfH, room.width - halfW, room.height - halfH);
+    } else if (side === 1) {
+      // Main top-right, extension bottom-left
+      carveRect(tiles, room.x, room.y, room.width, halfH);
+      carveRect(tiles, room.x, room.y + halfH, halfW, room.height - halfH);
+    } else if (side === 2) {
+      // Main left, extension right-bottom
+      carveRect(tiles, room.x, room.y, halfW, room.height);
+      carveRect(tiles, room.x + halfW, room.y + halfH, room.width - halfW, room.height - halfH);
+    } else {
+      // Main right, extension left-top
+      carveRect(tiles, room.x + halfW, room.y, room.width - halfW, room.height);
+      carveRect(tiles, room.x, room.y, halfW, halfH);
+    }
+  } else if (roll < 0.75) {
+    // Cross/Plus (15%): horizontal + vertical bars
+    const barH = Math.max(2, Math.floor(room.height * 0.4));
+    const barW = Math.max(2, Math.floor(room.width * 0.4));
+    const offsetY = Math.floor((room.height - barH) / 2);
+    const offsetX = Math.floor((room.width - barW) / 2);
+    // Horizontal bar (full width, partial height)
+    carveRect(tiles, room.x, room.y + offsetY, room.width, barH);
+    // Vertical bar (partial width, full height)
+    carveRect(tiles, room.x + offsetX, room.y, barW, room.height);
+  } else if (roll < 0.9) {
+    // Round/Ellipse (15%)
+    const cx = room.x + room.width / 2;
+    const cy = room.y + room.height / 2;
+    const rx = room.width / 2;
+    const ry = room.height / 2;
+    for (let y = room.y; y < room.y + room.height; y += 1) {
+      for (let x = room.x; x < room.x + room.width; x += 1) {
+        const dx = (x + 0.5 - cx) / rx;
+        const dy = (y + 0.5 - cy) / ry;
+        if (dx * dx + dy * dy <= 1.0 && tiles[y]?.[x] !== undefined) {
+          tiles[y][x] = TileType.Floor;
+        }
+      }
+    }
+  } else {
+    // Irregular (10%): rectangle with 1-3 corners removed
+    carveRect(tiles, room.x, room.y, room.width, room.height);
+    const cornersToRemove = randomBetween(1, 3);
+    const cornerSize = Math.max(2, Math.floor(Math.min(room.width, room.height) / 3));
+    const corners = [0, 1, 2, 3];
+    // Fisher-Yates partial shuffle
+    for (let i = 0; i < cornersToRemove; i += 1) {
+      const j = i + Math.floor(nextRng() * (corners.length - i));
+      [corners[i], corners[j]] = [corners[j], corners[i]];
+    }
+    for (let i = 0; i < cornersToRemove; i += 1) {
+      let cx: number, cy: number;
+      if (corners[i] === 0) { cx = room.x; cy = room.y; }
+      else if (corners[i] === 1) { cx = room.x + room.width - cornerSize; cy = room.y; }
+      else if (corners[i] === 2) { cx = room.x; cy = room.y + room.height - cornerSize; }
+      else { cx = room.x + room.width - cornerSize; cy = room.y + room.height - cornerSize; }
+      for (let y = cy; y < cy + cornerSize; y += 1) {
+        for (let x = cx; x < cx + cornerSize; x += 1) {
+          if (tiles[y]?.[x] !== undefined) {
+            tiles[y][x] = TileType.Wall;
+          }
+        }
+      }
+    }
+  }
+}
+
+function addRoomPillars(tiles: TileTypeValue[][], room: Room): void {
+  const area = room.width * room.height;
+  if (area <= 80) return;
+  const pillarCount = randomBetween(1, 3);
+  const cx = Math.floor(room.x + room.width / 2);
+  const cy = Math.floor(room.y + room.height / 2);
+  for (let i = 0; i < pillarCount; i += 1) {
+    // Pick a random interior position (not edge, not center)
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const px = randomBetween(room.x + 2, room.x + room.width - 3);
+      const py = randomBetween(room.y + 2, room.y + room.height - 3);
+      if (px === cx && py === cy) continue;
+      if (tiles[py]?.[px] === TileType.Floor) {
+        tiles[py][px] = TileType.Wall;
+        break;
+      }
+    }
+  }
+}
+
+function carveHLine(tiles: TileTypeValue[][], xFrom: number, xTo: number, y: number, halfWidth: number): void {
+  for (let x = Math.min(xFrom, xTo); x <= Math.max(xFrom, xTo); x += 1) {
+    for (let dy = -halfWidth; dy <= halfWidth; dy += 1) {
+      if (tiles[y + dy]?.[x] !== undefined) {
+        tiles[y + dy][x] = TileType.Floor;
+      }
+    }
+  }
+}
+
+function carveVLine(tiles: TileTypeValue[][], yFrom: number, yTo: number, x: number, halfWidth: number): void {
+  for (let y = Math.min(yFrom, yTo); y <= Math.max(yFrom, yTo); y += 1) {
+    for (let dx = -halfWidth; dx <= halfWidth; dx += 1) {
+      if (tiles[y]?.[x + dx] !== undefined) {
+        tiles[y][x + dx] = TileType.Floor;
+      }
     }
   }
 }
@@ -88,28 +215,30 @@ function carveRoom(tiles: TileTypeValue[][], room: Room): void {
 function carveCorridor(
   tiles: TileTypeValue[][],
   from: Phaser.Math.Vector2,
-  to: Phaser.Math.Vector2
+  to: Phaser.Math.Vector2,
+  wide = false
 ): void {
-  const width = 1;
+  const halfWidth = wide ? 1 : 0;
   const x1 = Math.floor(from.x);
   const y1 = Math.floor(from.y);
   const x2 = Math.floor(to.x);
   const y2 = Math.floor(to.y);
 
-  for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x += 1) {
-    for (let dy = -width; dy <= width; dy += 1) {
-      if (tiles[y1 + dy]?.[x] !== undefined) {
-        tiles[y1 + dy][x] = TileType.Floor;
-      }
-    }
-  }
+  // Random bend offset (±2 tiles)
+  const bendOffsetX = randomBetween(-2, 2);
+  const bendOffsetY = randomBetween(-2, 2);
+  const verticalFirst = nextRng() < 0.5;
 
-  for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y += 1) {
-    for (let dx = -width; dx <= width; dx += 1) {
-      if (tiles[y]?.[x2 + dx] !== undefined) {
-        tiles[y][x2 + dx] = TileType.Floor;
-      }
-    }
+  if (verticalFirst) {
+    const bendY = Phaser.Math.Clamp(Math.floor((y1 + y2) / 2) + bendOffsetY, 1, GRID_HEIGHT - 2);
+    carveVLine(tiles, y1, bendY, x1, halfWidth);
+    carveHLine(tiles, x1, x2, bendY, halfWidth);
+    carveVLine(tiles, bendY, y2, x2, halfWidth);
+  } else {
+    const bendX = Phaser.Math.Clamp(Math.floor((x1 + x2) / 2) + bendOffsetX, 1, GRID_WIDTH - 2);
+    carveHLine(tiles, x1, bendX, y1, halfWidth);
+    carveVLine(tiles, y1, y2, bendX, halfWidth);
+    carveHLine(tiles, bendX, x2, y2, halfWidth);
   }
 }
 
@@ -230,8 +359,19 @@ export function generateDungeon(floor: number, seed = 0): DungeonLayout {
 
   while (rooms.length < roomCount && attempts < 400) {
     attempts += 1;
-    const width = randomBetween(5, 15);
-    const height = randomBetween(5, 12);
+    // Room size categories: small (30%), medium (50%), large (20%)
+    const sizeRoll = nextRng();
+    let width: number, height: number;
+    if (sizeRoll < 0.3) {
+      width = randomBetween(4, 6);
+      height = randomBetween(4, 6);
+    } else if (sizeRoll < 0.8) {
+      width = randomBetween(7, 12);
+      height = randomBetween(7, 10);
+    } else {
+      width = randomBetween(13, 18);
+      height = randomBetween(10, 14);
+    }
     const room: Room = {
       id: rooms.length,
       x: randomBetween(2, GRID_WIDTH - width - 3),
@@ -249,15 +389,23 @@ export function generateDungeon(floor: number, seed = 0): DungeonLayout {
     rooms.push(room);
   }
 
-  rooms.forEach((room) => carveRoom(tiles, room));
+  rooms.forEach((room) => carveRoomVariant(tiles, room));
+  rooms.forEach((room) => addRoomPillars(tiles, room));
   const edges = buildEdges(rooms);
   const mst = buildMst(rooms, edges);
-  const extraEdges = edges.filter((edge) => !mst.includes(edge)).slice(0, Math.max(1, Math.floor(edges.length * 0.18)));
+  const mstSet = new Set(mst);
+  const extraEdges = edges.filter((edge) => !mstSet.has(edge)).slice(0, Math.max(1, Math.floor(edges.length * 0.18)));
 
-  [...mst, ...extraEdges.filter(() => Math.random() < 0.55)].forEach((edge) => {
+  // MST edges get wide corridors, extra edges get narrow corridors
+  mst.forEach((edge) => {
     rooms[edge.a].neighbors.push(edge.b);
     rooms[edge.b].neighbors.push(edge.a);
-    carveCorridor(tiles, centerOf(rooms[edge.a]), centerOf(rooms[edge.b]));
+    carveCorridor(tiles, centerOf(rooms[edge.a]), centerOf(rooms[edge.b]), true);
+  });
+  extraEdges.filter(() => nextRng() < 0.55).forEach((edge) => {
+    rooms[edge.a].neighbors.push(edge.b);
+    rooms[edge.b].neighbors.push(edge.a);
+    carveCorridor(tiles, centerOf(rooms[edge.a]), centerOf(rooms[edge.b]), false);
   });
 
   const startRoom = rooms[0];
