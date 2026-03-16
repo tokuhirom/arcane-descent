@@ -2520,10 +2520,10 @@ class DungeonScene extends Phaser.Scene {
     const foundWeapon: Weapon = loot.lootType === "melee" ? loot.melee : loot.wand;
     this.isDialogOpen = true;
     this.resetJoystick();
+    this.physics.pause();
     sfx.play("pickup");
     this.showMessage(`${foundWeapon.rarity} ${foundWeapon.name} を発見！`);
     this.time.delayedCall(400, () => {
-    this.physics.pause();
     this.scene.pause();
     this.scene.launch("WeaponCompareScene", {
       current: this.run.player.weapon,
@@ -2997,10 +2997,10 @@ class DungeonScene extends Phaser.Scene {
     drop.disableBody(true, false);
     this.isDialogOpen = true;
     this.resetJoystick();
+    this.physics.pause();
     sfx.play("pickup");
     this.showMessage(`${drop.armor.rarity} ${drop.armor.name} を発見！`);
     this.time.delayedCall(400, () => {
-    this.physics.pause();
     this.scene.pause();
     this.scene.launch("ArmorCompareScene", {
       current: this.run.player.armor,
