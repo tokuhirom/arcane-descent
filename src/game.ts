@@ -281,7 +281,7 @@ function createRandomWand(floor: number, starter = false): Wand {
   const effects = Phaser.Utils.Array.Shuffle([...SPECIAL_EFFECTS]).slice(0, effectCount);
   const attribute = starter ? "None" : pick(ATTRIBUTES);
   const hasMultishot = effects.includes("Multishot");
-  const damage = (4 + floor * 0.35 + rarityIndex * 2) * (hasMultishot ? 0.4 : 1);
+  const damage = (3 + floor * 0.25 + rarityIndex * 1.5) * (hasMultishot ? 0.4 : 1);
   const fireRate = Math.max(180, 520 - floor * 2 - rarityIndex * 45);
   const wandType = hasMultishot ? ["連弾杖", "乱魔杖", "散華の杖"] : ["ワンド", "杖", "呪具"];
 
@@ -1524,10 +1524,18 @@ class DungeonScene extends Phaser.Scene {
 
     const weapon = this.run.player.weapon;
     if (isWand(weapon)) {
-      // Wands fire in the last movement direction
-      const targetX = this.player.x + this.lastAimDirection.x * 200;
-      const targetY = this.player.y + this.lastAimDirection.y * 200;
-      this.spawnPlayerProjectile(targetX, targetY, weapon.specialEffects);
+      // Wands auto-target nearest enemy
+      const activeEnemies = this.enemies.getChildren().filter((child) => {
+        const enemy = child as EnemySprite;
+        return enemy.active && enemy.visible && enemy.activeRoom;
+      }) as EnemySprite[];
+      if (activeEnemies.length === 0) return;
+      activeEnemies.sort((a, b) =>
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
+      );
+      const target = activeEnemies[0];
+      this.spawnPlayerProjectile(target.x, target.y, weapon.specialEffects);
       this.fireTimer = Math.max(120, weapon.stats.fireRate - this.run.player.stats.S * 12);
     } else {
       // Melee attack - target nearest enemy

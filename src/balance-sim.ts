@@ -55,7 +55,7 @@ function createRandomWand(floor: number, starter = false): Wand {
   const effectCount = Math.max(0, ri - 1);
   const effects = [...SPECIAL_EFFECTS].sort(() => Math.random() - 0.5).slice(0, effectCount) as SpecialEffect[];
   const hasMultishot = effects.includes("Multishot");
-  const damage = (8 + floor * 0.7 + ri * 4) * (hasMultishot ? 0.4 : 1);
+  const damage = (3 + floor * 0.25 + ri * 1.5) * (hasMultishot ? 0.4 : 1);
   const fireRate = Math.max(180, 520 - floor * 2 - ri * 45);
 
   return {
