@@ -1187,7 +1187,7 @@ class DungeonScene extends Phaser.Scene {
     this.layout.rooms
       .filter((room) => room.kind === "normal")
       .forEach((room) => {
-        if (Math.random() < 0.35) {
+        if (Math.random() < 0.15) {
           const cx = (room.x + 1 + Math.random() * (room.width - 2)) * TILE_SIZE;
           const cy = (room.y + 1 + Math.random() * (room.height - 2)) * TILE_SIZE;
           this.chests.create(cx, cy, "chest");
@@ -2290,17 +2290,17 @@ class DungeonScene extends Phaser.Scene {
     const gainedXp = 5 + Math.floor(this.run.floor / 2) + Math.floor(this.run.player.stats.A * 0.6);
     this.run.player.xp += gainedXp;
     const shouldDrop = !skipDrops && !enemy.selfDestructed;
-    if (shouldDrop && Math.random() < 0.03 + this.run.player.stats.F * 0.005) {
+    if (shouldDrop && Math.random() < 0.015 + this.run.player.stats.F * 0.003) {
       if (Math.random() < 0.5) {
         this.spawnWandDrop(enemy.x, enemy.y, createRandomWand(this.run.floor + this.run.player.stats.F));
       } else {
         this.spawnMeleeDrop(enemy.x, enemy.y, createRandomMelee(this.run.floor + this.run.player.stats.F));
       }
     }
-    if (shouldDrop && Math.random() < 0.03) {
+    if (shouldDrop && Math.random() < 0.015) {
       this.spawnArmorDrop(enemy.x + 10, enemy.y, createRandomArmor(this.run.floor + this.run.player.stats.F));
     }
-    if (shouldDrop && Math.random() < 0.10) {
+    if (shouldDrop && Math.random() < 0.06) {
       this.spawnPotion(enemy.x, enemy.y);
     }
     if (this.run.player.armor.specialEffect === "Regen") {

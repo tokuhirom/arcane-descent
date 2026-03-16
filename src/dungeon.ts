@@ -218,7 +218,7 @@ function carveCorridor(
   to: Phaser.Math.Vector2,
   wide = false
 ): void {
-  const halfWidth = wide ? 1 : 0;
+  const halfWidth = wide ? 2 : 1;
   const x1 = Math.floor(from.x);
   const y1 = Math.floor(from.y);
   const x2 = Math.floor(to.x);
