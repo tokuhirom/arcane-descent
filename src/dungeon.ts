@@ -311,17 +311,15 @@ function pickLeafRoom(roomIds: number[], rooms: Room[], exclude: Set<number>): n
 
 function createBossFloor(tiles: TileTypeValue[][], floor: number): DungeonLayout {
   const rooms: Room[] = [
-    { id: 0, x: 4, y: 14, width: 10, height: 8, kind: "start", neighbors: [1] },
-    { id: 1, x: 18, y: 12, width: 11, height: 12, kind: "normal", neighbors: [0, 2] },
-    { id: 2, x: 33, y: 10, width: 19, height: 18, kind: "boss", neighbors: [1] }
+    { id: 0, x: 4, y: 12, width: 10, height: 10, kind: "start", neighbors: [1] },
+    { id: 1, x: 22, y: 6, width: 24, height: 24, kind: "boss", neighbors: [0] }
   ];
 
   rooms.forEach((room) => carveRoom(tiles, room));
   carveCorridor(tiles, centerOf(rooms[0]), centerOf(rooms[1]));
-  carveCorridor(tiles, centerOf(rooms[1]), centerOf(rooms[2]));
   finalizeWalls(tiles);
 
-  const bossCenter = centerOf(rooms[2]);
+  const bossCenter = centerOf(rooms[1]);
   return {
     floor,
     width: GRID_WIDTH,
@@ -334,12 +332,12 @@ function createBossFloor(tiles: TileTypeValue[][], floor: number): DungeonLayout
       {
         x: bossCenter.x,
         y: bossCenter.y,
-        roomId: 2,
+        roomId: 1,
         kind: floor === 100 ? "summoner" : pickEnemyKind(floor),
         elite: true
       }
     ],
-    bossRoomId: 2
+    bossRoomId: 1
   };
 }
 
