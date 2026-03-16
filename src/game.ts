@@ -281,7 +281,7 @@ function createRandomWand(floor: number, starter = false): Wand {
   const effects = Phaser.Utils.Array.Shuffle([...SPECIAL_EFFECTS]).slice(0, effectCount);
   const attribute = starter ? "None" : pick(ATTRIBUTES);
   const hasMultishot = effects.includes("Multishot");
-  const damage = (5 + floor * 0.5 + rarityIndex * 3) * (hasMultishot ? 0.4 : 1);
+  const damage = (4 + floor * 0.35 + rarityIndex * 2) * (hasMultishot ? 0.4 : 1);
   const fireRate = Math.max(180, 520 - floor * 2 - rarityIndex * 45);
   const wandType = hasMultishot ? ["連弾杖", "乱魔杖", "散華の杖"] : ["ワンド", "杖", "呪具"];
 
@@ -931,6 +931,7 @@ class DungeonScene extends Phaser.Scene {
   private joystickVector = new Phaser.Math.Vector2();
   private joystickPointer?: Phaser.Input.Pointer;
   private knockbackVelocity = new Phaser.Math.Vector2();
+  private lastAimDirection = new Phaser.Math.Vector2(1, 0);
   private isDying = false;
   private stairsCooldown = 0;
   private currentRoomId?: number;
@@ -1411,7 +1412,9 @@ class DungeonScene extends Phaser.Scene {
       speedMultiplier *= 1.5;
     }
     if (movement.lengthSq() > 0) {
-      movement.normalize().scale((BASE_SPEED + this.run.player.stats.S * 10) * speedMultiplier);
+      movement.normalize();
+      this.lastAimDirection.copy(movement);
+      movement.scale((BASE_SPEED + this.run.player.stats.S * 10) * speedMultiplier);
     }
 
     if (this.knockbackVelocity.lengthSq() > 1) {
@@ -1519,27 +1522,29 @@ class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    const activeEnemies = this.enemies.getChildren().filter((child) => {
-      const enemy = child as EnemySprite;
-      return enemy.active && enemy.visible && enemy.activeRoom;
-    }) as EnemySprite[];
-
-    if (activeEnemies.length === 0) {
-      return;
-    }
-
-    activeEnemies.sort((a, b) =>
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
-    );
-
     const weapon = this.run.player.weapon;
     if (isWand(weapon)) {
-      const target = activeEnemies[0];
-      this.spawnPlayerProjectile(target.x, target.y, weapon.specialEffects);
+      // Wands fire in the last movement direction
+      const targetX = this.player.x + this.lastAimDirection.x * 200;
+      const targetY = this.player.y + this.lastAimDirection.y * 200;
+      this.spawnPlayerProjectile(targetX, targetY, weapon.specialEffects);
       this.fireTimer = Math.max(120, weapon.stats.fireRate - this.run.player.stats.S * 12);
     } else {
-      // Melee attack
+      // Melee attack - target nearest enemy
+      const activeEnemies = this.enemies.getChildren().filter((child) => {
+        const enemy = child as EnemySprite;
+        return enemy.active && enemy.visible && enemy.activeRoom;
+      }) as EnemySprite[];
+
+      if (activeEnemies.length === 0) {
+        return;
+      }
+
+      activeEnemies.sort((a, b) =>
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
+      );
+
       const target = activeEnemies[0];
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
       if (dist > weapon.range) {
@@ -1653,7 +1658,7 @@ class DungeonScene extends Phaser.Scene {
       const spread = shots === 1 ? 0 : Phaser.Math.DegToRad((i - 1) * 12);
       const projectile = this.projectiles.create(this.player.x, this.player.y, "projectile") as ProjectileSprite;
       projectile.owner = "player";
-      projectile.damage = weapon.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 1.5 : 1);
+      projectile.damage = weapon.stats.damage * (1 + this.run.player.stats.P * 0.08) * (this.run.player.powerBoostMs > 0 ? 1.5 : 1) * (effects.includes("Homing") ? 0.7 : 1);
       projectile.piercing = weapon.stats.piercing;
       projectile.attribute = weapon.attribute;
       projectile.specialEffects = [...effects];
@@ -1878,7 +1883,7 @@ class DungeonScene extends Phaser.Scene {
       const projectile = child as ProjectileSprite | null;
       if (!projectile || !projectile.active) return true;
       if (projectile.specialEffects.includes("Homing")) {
-        this.applyProjectileHoming(projectile, 0.08);
+        this.applyProjectileHoming(projectile, 0.03);
       }
       projectile.lifetimeMs -= delta;
       if (projectile.lifetimeMs <= 0 || this.isProjectileInWall(projectile)) {
