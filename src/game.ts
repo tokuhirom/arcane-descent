@@ -2436,14 +2436,16 @@ class DungeonScene extends Phaser.Scene {
   private onLootChest(obj1: Phaser.GameObjects.GameObject, obj2: Phaser.GameObjects.GameObject): void {
     const chest = (obj1 === this.player ? obj2 : obj1) as Phaser.Physics.Arcade.Image;
     sfx.play("pickup");
-    if (Math.random() < 0.5) {
+    const roll = Math.random();
+    if (roll < 0.35) {
       this.spawnWandDrop(chest.x, chest.y, createRandomWand(this.run.floor + 4 + this.run.player.stats.F));
-    } else {
+    } else if (roll < 0.7) {
       this.spawnMeleeDrop(chest.x, chest.y, createRandomMelee(this.run.floor + 4 + this.run.player.stats.F));
+    } else {
+      this.spawnArmorDrop(chest.x, chest.y, createRandomArmor(this.run.floor + 4 + this.run.player.stats.F));
     }
-    this.spawnArmorDrop(chest.x + 16, chest.y, createRandomArmor(this.run.floor + 4 + this.run.player.stats.F));
     this.run.player.hp = Math.min(this.run.player.maxHp, this.run.player.hp + 8);
-    this.showMessage("宝箱から武器と防具が落ちた");
+    this.showMessage("宝箱からアイテムが落ちた");
     chest.destroy();
   }
 
