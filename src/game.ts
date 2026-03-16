@@ -1609,6 +1609,7 @@ class DungeonScene extends Phaser.Scene {
       }
 
       enemy.hp -= damage;
+      this.showDamageNumber(enemy.x, enemy.y, damage);
       sfx.play("enemyHit");
 
       if (weapon.specialEffects.includes("Explosion")) {
@@ -2167,8 +2168,10 @@ class DungeonScene extends Phaser.Scene {
     if (projectile.attribute === "Poison") damage *= 1.05 + this.run.player.stats.A * 0.01;
     if (projectile.attribute === "Fire") damage += 2 + this.run.player.stats.A * 0.2;
     if (projectile.attribute === "Thunder" && Math.random() < 0.15) enemy.stunMs = Math.max(enemy.stunMs, 250 + this.run.player.stats.A * 20);
+    let isCrit = false;
     if (Math.random() < this.run.player.stats.T * 0.015) {
       damage *= 1.7;
+      isCrit = true;
       this.showCritEffect(enemy);
     }
 
@@ -2181,6 +2184,7 @@ class DungeonScene extends Phaser.Scene {
     }
 
     enemy.hp -= damage;
+    this.showDamageNumber(enemy.x, enemy.y, damage, isCrit ? "#ffff00" : "#ffffff", isCrit);
     sfx.play("enemyHit");
     projectile.piercing -= 1;
 
@@ -2427,7 +2431,7 @@ class DungeonScene extends Phaser.Scene {
     const { died, damageDealt } = applyDamage(this.run.player, amount, attribute, bypassInvuln, armorDef);
     if (damageDealt > 0) {
       sfx.play("playerHit");
-      console.log(`HIT: ${damageDealt.toFixed(1)} ${attribute} hp=${this.run.player.hp.toFixed(1)} died=${died}`);
+      this.showDamageNumber(this.player.x, this.player.y, damageDealt, "#ff4444", damageDealt >= 15);
     }
     if (died) {
       this.startDeathSequence(cause);
@@ -2609,7 +2613,9 @@ class DungeonScene extends Phaser.Scene {
     enemy.slowMs = Math.max(0, enemy.slowMs - delta);
     enemy.stunMs = Math.max(0, enemy.stunMs - delta);
     if (enemy.burnMs > 0 && Phaser.Math.Between(0, 100) < 10) {
-      enemy.hp -= 0.6 + this.run.player.stats.A * 0.05;
+      const burnDmg = 0.6 + this.run.player.stats.A * 0.05;
+      enemy.hp -= burnDmg;
+      this.showDamageNumber(enemy.x, enemy.y, burnDmg, "#ff6b35");
       if (enemy.hp <= 0) {
         this.killEnemy(enemy);
       }
@@ -2835,6 +2841,25 @@ class DungeonScene extends Phaser.Scene {
         this.messageText.setAlpha(1);
       }
     }
+  }
+
+  private showDamageNumber(x: number, y: number, amount: number, color = "#ffffff", big = false): void {
+    const size = big ? 22 : 14;
+    const text = this.add.text(x + Phaser.Math.Between(-8, 8), y - 10, Math.ceil(amount).toString(), {
+      fontFamily: "Trebuchet MS, sans-serif",
+      fontSize: `${size}px`,
+      color,
+      stroke: "#000000",
+      strokeThickness: 3
+    }).setOrigin(0.5).setDepth(10);
+    this.tweens.add({
+      targets: text,
+      y: y - 40 - (big ? 16 : 0),
+      alpha: 0,
+      scale: big ? 1.4 : 1,
+      duration: big ? 900 : 500,
+      onComplete: () => text.destroy()
+    });
   }
 
   private showCritEffect(enemy: EnemySprite): void {
