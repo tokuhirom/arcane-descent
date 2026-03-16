@@ -123,7 +123,7 @@ export function createDefaultPlayer(): PlayerState {
     maxHp: 36,
     xp: 0,
     level: 1,
-    nextXp: 50,
+    nextXp: 80,
     statPoints: 0,
     stats: { P: 4, I: 4, V: 4, F: 4, A: 4, S: 4, T: 4 },
     burnMs: 0,

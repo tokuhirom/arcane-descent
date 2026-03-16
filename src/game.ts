@@ -24,7 +24,7 @@ declare const __COMMIT_HASH__: string;
 
 type FogState = 0 | 1 | 2;
 type Rarity = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary";
-type SpecialEffect = "Multishot" | "Homing" | "Explosion" | "Chain" | "Lifesteal";
+type SpecialEffect = "Multishot" | "Homing" | "Explosion" | "Chain" | "Lifesteal" | "CritDamage";
 interface Wand {
   type: "ranged";
   name: string;
@@ -153,7 +153,7 @@ const GAME_HEIGHT = 960;
 const BASE_SPEED = 120;
 const ATTRIBUTES: Attribute[] = ["Fire", "Ice", "Thunder", "Poison", "None"];
 const RARITIES: Rarity[] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"];
-const SPECIAL_EFFECTS: SpecialEffect[] = ["Multishot", "Homing", "Explosion", "Chain", "Lifesteal"];
+const SPECIAL_EFFECTS: SpecialEffect[] = ["Multishot", "Homing", "Explosion", "Chain", "Lifesteal", "CritDamage"];
 const STAT_KEYS: StatKey[] = ["P", "I", "V", "F", "A", "S", "T"];
 const STAT_LABELS: Record<StatKey, string> = {
   P: "Power",
@@ -210,7 +210,7 @@ function createStarterState(): RunState {
       maxHp: 36,
       xp: 0,
       level: 1,
-      nextXp: 50,
+      nextXp: 80,
       statPoints: 0,
       stats: {
         P: 4,
@@ -633,13 +633,18 @@ class WeaponCompareScene extends Phaser.Scene {
 
   create(data: { current: Weapon; found: Weapon; pStat: number; sStat: number; onEquip: () => void; onSkip: () => void }): void {
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05050b, 0.6);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 380, 0x0f1020, 0.94)
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 480, 460, 0x0f1020, 0.94)
       .setStrokeStyle(2, 0x9d4edd);
 
-    const cx = panel.x - 200;
-    const cy = panel.y - 160;
+    const cx = panel.x - 220;
+    const topY = panel.y - 210;
 
-    makeText(this, cx, cy, "武器比較", 24, "#f8f1ff");
+    makeText(this, cx, topY, "武器比較", 22, "#f8f1ff");
+
+    const effectLabels: Record<string, string> = {
+      Multishot: "拡散", Homing: "追尾", Explosion: "爆発",
+      Chain: "連鎖", Lifesteal: "吸血", CritDamage: "会心強化"
+    };
 
     const calcDps = (weapon: Weapon): number => {
       if (isWand(weapon)) {
@@ -656,32 +661,33 @@ class WeaponCompareScene extends Phaser.Scene {
 
     const drawWeapon = (weapon: Weapon, x: number, y: number, label: string, highlight: boolean) => {
       const color = highlight ? "#f4d35e" : "#cdb4db";
-      makeText(this, x, y, label, 16, color);
-      makeText(this, x, y + 22, `${weapon.name}`, 18, "#f8f1ff");
-      makeText(this, x, y + 46, `${weapon.rarity}  ${weapon.attribute}`, 14, "#cdb4db");
+      makeText(this, x, y, label, 15, color);
+      makeText(this, x, y + 18, weapon.name, 17, "#f8f1ff");
+      const typeLabel = isWand(weapon) ? "魔法" : "近接";
+      makeText(this, x, y + 38, `${weapon.rarity} ${typeLabel} ${weapon.attribute}`, 12, "#cdb4db");
       if (isWand(weapon)) {
-        makeText(this, x, y + 66, `攻撃 ${weapon.stats.damage.toFixed(1)}  速度 ${weapon.stats.fireRate}  貫通 ${weapon.stats.piercing}`, 14, "#9ad1ff");
+        makeText(this, x, y + 54, `攻撃${weapon.stats.damage.toFixed(1)} 速度${weapon.stats.fireRate} 貫通${weapon.stats.piercing}`, 12, "#9ad1ff");
       } else {
-        makeText(this, x, y + 66, `攻撃 ${weapon.damage.toFixed(1)}  振速 ${weapon.swingRate}  範囲 ${weapon.range}`, 14, "#9ad1ff");
+        makeText(this, x, y + 54, `攻撃${weapon.damage.toFixed(1)} 振速${weapon.swingRate} 範囲${weapon.range} 角${weapon.arc}°`, 12, "#9ad1ff");
       }
-      const dps = calcDps(weapon);
-      makeText(this, x, y + 86, `DPS ${dps.toFixed(1)}`, 15, "#ff6b6b");
-      const fx = weapon.specialEffects.length > 0 ? weapon.specialEffects.join(", ") : "-";
-      makeText(this, x, y + 104, fx, 13, "#80ed99");
+      makeText(this, x, y + 70, `DPS ${calcDps(weapon).toFixed(1)}`, 14, "#ff6b6b");
+      const fx = weapon.specialEffects.map((e) => effectLabels[e] ?? e).join(" ");
+      makeText(this, x, y + 86, fx || "効果なし", 12, "#80ed99");
     };
 
-    drawWeapon(data.current, cx, cy + 36, "装備中", false);
-    drawWeapon(data.found, cx, cy + 170, "発見!", true);
+    drawWeapon(data.current, cx, topY + 30, "装備中", false);
+    drawWeapon(data.found, cx, topY + 140, "発見!", true);
 
-    const equipBtn = this.add.rectangle(panel.x - 70, panel.y + 130, 140, 40, 0x3a254f, 1)
+    const btnY = panel.y + 185;
+    const equipBtn = this.add.rectangle(panel.x - 70, btnY, 140, 40, 0x3a254f, 1)
       .setInteractive({ useHandCursor: true })
       .setStrokeStyle(1, 0xf4d35e);
-    makeText(this, panel.x - 115, panel.y + 118, "装備する", 20, "#f4d35e");
+    makeText(this, panel.x - 115, btnY - 12, "装備する", 20, "#f4d35e");
 
-    const skipBtn = this.add.rectangle(panel.x + 80, panel.y + 130, 140, 40, 0x241734, 1)
+    const skipBtn = this.add.rectangle(panel.x + 80, btnY, 140, 40, 0x241734, 1)
       .setInteractive({ useHandCursor: true })
       .setStrokeStyle(1, 0x9d4edd);
-    makeText(this, panel.x + 35, panel.y + 118, "捨てる", 20, "#cdb4db");
+    makeText(this, panel.x + 35, btnY - 12, "捨てる", 20, "#cdb4db");
 
     const equip = () => { this.scene.stop(); data.onEquip(); };
     const skip = () => { this.scene.stop(); data.onSkip(); };
@@ -885,6 +891,8 @@ class DungeonScene extends Phaser.Scene {
   private statusText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
   private dangerOverlay!: Phaser.GameObjects.Rectangle;
+  private killLogText!: Phaser.GameObjects.Text;
+  private killLog: string[] = [];
   private pauseButton!: Phaser.GameObjects.Text;
   private soundButton!: Phaser.GameObjects.Text;
   private joystickBase?: Phaser.GameObjects.Arc;
@@ -1017,6 +1025,8 @@ class DungeonScene extends Phaser.Scene {
     this.messageText = makeText(this, 24, GAME_HEIGHT - 34, "", 18, "#fff2b2").setScrollFactor(0);
     this.dangerOverlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xff0000, 0)
       .setScrollFactor(0).setDepth(15);
+    this.killLogText = makeText(this, GAME_WIDTH - 160, 190, "", 11, "#aaaaaa").setScrollFactor(0);
+    this.killLog = [];
     this.soundButton = makeText(this, GAME_WIDTH - 130, GAME_HEIGHT - 90, sfx.muted ? "[x]" : "[♪]", 24, "#f8f1ff")
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
@@ -1595,8 +1605,10 @@ class DungeonScene extends Phaser.Scene {
       if (weapon.attribute === "Poison") damage *= 1.05 + this.run.player.stats.A * 0.01;
       if (weapon.attribute === "Fire") damage += 2 + this.run.player.stats.A * 0.2;
       if (weapon.attribute === "Thunder" && Math.random() < 0.15) enemy.stunMs = Math.max(enemy.stunMs, 250 + this.run.player.stats.A * 20);
+      let isMeleeCrit = false;
       if (Math.random() < this.run.player.stats.T * 0.015) {
-        damage *= 1.7;
+        damage *= weapon.specialEffects.includes("CritDamage") ? 2.5 : 1.7;
+        isMeleeCrit = true;
         this.showCritEffect(enemy);
       }
 
@@ -1609,7 +1621,7 @@ class DungeonScene extends Phaser.Scene {
       }
 
       enemy.hp -= damage;
-      this.showDamageNumber(enemy.x, enemy.y, damage);
+      this.showDamageNumber(enemy.x, enemy.y, damage, isMeleeCrit ? "#ffff00" : "#ffffff", isMeleeCrit);
       sfx.play("enemyHit");
 
       if (weapon.specialEffects.includes("Explosion")) {
@@ -2170,7 +2182,7 @@ class DungeonScene extends Phaser.Scene {
     if (projectile.attribute === "Thunder" && Math.random() < 0.15) enemy.stunMs = Math.max(enemy.stunMs, 250 + this.run.player.stats.A * 20);
     let isCrit = false;
     if (Math.random() < this.run.player.stats.T * 0.015) {
-      damage *= 1.7;
+      damage *= projectile.specialEffects.includes("CritDamage") ? 2.5 : 1.7;
       isCrit = true;
       this.showCritEffect(enemy);
     }
@@ -2272,6 +2284,9 @@ class DungeonScene extends Phaser.Scene {
   private killEnemy(enemy: EnemySprite, skipDrops = false): void {
     sfx.play("enemyDeath");
     healOnKill(this.run.player);
+    this.killLog.unshift(enemyDisplayName(enemy));
+    if (this.killLog.length > 5) this.killLog.pop();
+    this.killLogText.setText(this.killLog.join("\n"));
     const gainedXp = 5 + Math.floor(this.run.floor / 2) + Math.floor(this.run.player.stats.A * 0.6);
     this.run.player.xp += gainedXp;
     const shouldDrop = !skipDrops && !enemy.selfDestructed;
@@ -2396,9 +2411,7 @@ class DungeonScene extends Phaser.Scene {
       return;
     }
     enemy.touchCooldown = 700;
-    const killerName = enemy.bossTier > 0
-      ? (BOSS_PROFILES[this.run.floor]?.name ?? `${enemy.attribute}のボス`)
-      : `${enemy.attribute}の${enemy.kind}`;
+    const killerName = enemyDisplayName(enemy);
     let touchDmg = (enemy.kind === "rusher" ? 10 : enemy.kind === "lancer" && enemy.chargeTimer <= 0 && enemy.chargeTimer > -300 ? 15 + this.run.floor * 0.6 : 6) + this.run.floor * 0.4 + enemy.bossTier * 3;
     if (enemy.kind === "berserker") {
       touchDmg *= 1 + (1 - enemy.hp / enemy.maxHp);
@@ -3011,6 +3024,19 @@ class DungeonScene extends Phaser.Scene {
 
 function roomCenter(room: Room): Phaser.Math.Vector2 {
   return new Phaser.Math.Vector2(room.x + room.width / 2, room.y + room.height / 2);
+}
+
+const ENEMY_NAMES: Record<string, string> = {
+  chaser: "鬼", shooter: "弓兵", rusher: "獣",
+  splitter: "蟲", summoner: "呪術師", guardian: "盾兵",
+  bomber: "爆弾魔", berserker: "狂戦士", shielder: "壁兵", lancer: "槍兵"
+};
+
+function enemyDisplayName(enemy: EnemySprite): string {
+  if (enemy.bossTier > 0) {
+    return BOSS_PROFILES[Math.floor(enemy.bossTier * 10)]?.name ?? "ボス";
+  }
+  return `${enemy.attribute === "None" ? "" : enemy.attribute + "の"}${ENEMY_NAMES[enemy.kind] ?? enemy.kind}`;
 }
 
 function attributeColor(attribute: Attribute): number {
