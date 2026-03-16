@@ -935,6 +935,7 @@ class DungeonScene extends Phaser.Scene {
   private knockbackVelocity = new Phaser.Math.Vector2();
   private lastAimDirection = new Phaser.Math.Vector2(1, 0);
   private isDying = false;
+  private isDialogOpen = false;
   private stairsCooldown = 0;
   private currentRoomId?: number;
   private roomTitleText?: Phaser.GameObjects.Text;
@@ -1081,7 +1082,7 @@ class DungeonScene extends Phaser.Scene {
     }
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.scene.isPaused() || this.joystickPointer) {
+      if (this.isDialogOpen || this.scene.isPaused() || this.joystickPointer) {
         return;
       }
       this.joystickPointer = pointer;
@@ -1090,7 +1091,7 @@ class DungeonScene extends Phaser.Scene {
       this.joystickThumb?.setPosition(pointer.x, pointer.y).setVisible(true);
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (this.scene.isPaused() || !pointer.isDown || pointer !== this.joystickPointer) {
+      if (this.isDialogOpen || this.scene.isPaused() || !pointer.isDown || pointer !== this.joystickPointer) {
         return;
       }
       this.updateJoystick(pointer);
@@ -1114,12 +1115,14 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private pauseWithJoystickReset(): void {
+    this.isDialogOpen = true;
     this.resetJoystick();
     this.physics.pause();
     this.scene.pause();
   }
 
   private resumeFromPause(): void {
+    this.isDialogOpen = false;
     this.physics.resume();
     this.scene.resume();
   }
@@ -1312,13 +1315,11 @@ class DungeonScene extends Phaser.Scene {
   }
 
   private doUpdate(delta: number): void {
-    if (this.isDying) {
+    if (this.isDying || this.isDialogOpen) {
       return;
     }
     // Safety: if physics got stuck paused, resume it
-    if (!this.physics.world.isPaused) {
-      // OK
-    } else if (!this.scene.isPaused()) {
+    if (this.physics.world.isPaused && !this.scene.isPaused()) {
       this.physics.resume();
     }
     if (this.stairsCooldown > 0) {
