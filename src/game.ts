@@ -116,10 +116,11 @@ interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
   chainHits: number;
 }
 
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 
 interface RunState {
   saveVersion: number;
+  seed: number;
   floor: number;
   player: GamePlayerState;
 }
@@ -201,6 +202,7 @@ function clampStat(value: number): number {
 function createStarterState(): RunState {
   return {
     saveVersion: SAVE_VERSION,
+    seed: Date.now(),
     floor: 1,
     player: {
       hp: 36,
@@ -954,6 +956,15 @@ class DungeonScene extends Phaser.Scene {
 
   create(runState: RunState): void {
     this.run = runState;
+    this.isDying = false;
+    this.isDialogOpen = false;
+    this.stairsCooldown = 0;
+    this.passiveTickMs = 0;
+    this.bossPhase = 1;
+    this.enemyUpdateFrame = 0;
+    this.bossDoorLocked = false;
+    this.fireTimer = 0;
+    this.knockbackVelocity.set(0, 0);
     this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys);
     this.wasd = this.input.keyboard?.addKeys("W,A,S,D") as Record<string, Phaser.Input.Keyboard.Key>;
 
@@ -972,7 +983,7 @@ class DungeonScene extends Phaser.Scene {
     this.icePillars = this.physics.add.staticGroup();
     this.potions = this.physics.add.group();
 
-    this.layout = generateDungeon(this.run.floor);
+    this.layout = generateDungeon(this.run.floor, this.run.seed);
     this.fog = Array.from({ length: this.layout.height }, () =>
       Array.from({ length: this.layout.width }, () => 0 as FogState)
     );
@@ -2458,6 +2469,9 @@ class DungeonScene extends Phaser.Scene {
     loot.disableBody(true, false);
     const foundWeapon: Weapon = loot.lootType === "melee" ? loot.melee : loot.wand;
     this.pauseWithJoystickReset();
+    sfx.play("pickup");
+    this.showMessage(`${foundWeapon.rarity} ${foundWeapon.name} を発見！`);
+    this.time.delayedCall(400, () => {
     this.scene.launch("WeaponCompareScene", {
       current: this.run.player.weapon,
       found: foundWeapon,
@@ -2475,6 +2489,7 @@ class DungeonScene extends Phaser.Scene {
         loot.destroy();
         this.resumeFromPause();
       }
+    });
     });
   }
 
@@ -2907,6 +2922,9 @@ class DungeonScene extends Phaser.Scene {
     }
     drop.disableBody(true, false);
     this.pauseWithJoystickReset();
+    sfx.play("pickup");
+    this.showMessage(`${drop.armor.rarity} ${drop.armor.name} を発見！`);
+    this.time.delayedCall(400, () => {
     this.scene.launch("ArmorCompareScene", {
       current: this.run.player.armor,
       found: drop.armor,
@@ -2922,6 +2940,7 @@ class DungeonScene extends Phaser.Scene {
         drop.destroy();
         this.resumeFromPause();
       }
+    });
     });
   }
 }

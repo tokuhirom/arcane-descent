@@ -49,8 +49,19 @@ interface Edge {
   distance: number;
 }
 
+let rngState = 0;
+
+function seedRng(seed: number): void {
+  rngState = seed | 0;
+}
+
+function nextRng(): number {
+  rngState = (rngState * 1664525 + 1013904223) | 0;
+  return (rngState >>> 0) / 4294967296;
+}
+
 function randomBetween(min: number, max: number): number {
-  return Phaser.Math.Between(min, max);
+  return min + Math.floor(nextRng() * (max - min + 1));
 }
 
 function centerOf(room: Room): Phaser.Math.Vector2 {
@@ -202,7 +213,8 @@ function createBossFloor(tiles: TileTypeValue[][], floor: number): DungeonLayout
   };
 }
 
-export function generateDungeon(floor: number): DungeonLayout {
+export function generateDungeon(floor: number, seed = 0): DungeonLayout {
+  seedRng(seed + floor * 7919);
   const tiles = Array.from({ length: GRID_HEIGHT }, () =>
     Array.from({ length: GRID_WIDTH }, () => TileType.Wall)
   );
