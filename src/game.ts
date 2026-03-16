@@ -1315,6 +1315,12 @@ class DungeonScene extends Phaser.Scene {
     if (this.isDying) {
       return;
     }
+    // Safety: if physics got stuck paused, resume it
+    if (!this.physics.world.isPaused) {
+      // OK
+    } else if (!this.scene.isPaused()) {
+      this.physics.resume();
+    }
     if (this.stairsCooldown > 0) {
       this.stairsCooldown -= delta;
     }
