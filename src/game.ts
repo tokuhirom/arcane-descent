@@ -104,6 +104,7 @@ interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
   zigzagTimer: number;
   chargeTimer: number;
   wobblePhase: number;
+  chargeDirection: Phaser.Math.Vector2;
 }
 
 interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
@@ -409,73 +410,29 @@ class BootScene extends Phaser.Scene {
     g.generateTexture("projectile", 10, 10);
     g.clear();
 
-    g.fillStyle(0xff595e, 1);
-    g.fillCircle(10, 10, 8);
-    g.generateTexture("enemy-chaser", 20, 20);
-    g.clear();
+    const makeCharTexture = (key: string, char: string, color: number, size = 20) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx2d = canvas.getContext("2d")!;
+      ctx2d.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
+      ctx2d.font = `bold ${size - 4}px Trebuchet MS, sans-serif`;
+      ctx2d.textAlign = "center";
+      ctx2d.textBaseline = "middle";
+      ctx2d.fillText(char, size / 2, size / 2 + 1);
+      this.textures.addCanvas(key, canvas);
+    };
 
-    // Shooter: diamond/rhombus shape
-    g.fillStyle(0x56cfe1, 1);
-    g.beginPath();
-    g.moveTo(10, 1);
-    g.lineTo(19, 10);
-    g.lineTo(10, 19);
-    g.lineTo(1, 10);
-    g.closePath();
-    g.fillPath();
-    g.generateTexture("enemy-shooter", 20, 20);
-    g.clear();
-
-    // Rusher: triangle pointing right (arrow-like)
-    g.fillStyle(0xff924c, 1);
-    g.beginPath();
-    g.moveTo(19, 10);
-    g.lineTo(1, 1);
-    g.lineTo(1, 19);
-    g.closePath();
-    g.fillPath();
-    g.generateTexture("enemy-rusher", 20, 20);
-    g.clear();
-
-    // Splitter: two small circles side by side
-    g.fillStyle(0xc77dff, 1);
-    g.fillCircle(6, 10, 5);
-    g.fillCircle(14, 10, 5);
-    g.generateTexture("enemy-splitter", 20, 20);
-    g.clear();
-
-    // Summoner: circle with orbiting dot
-    g.fillStyle(0x95d5b2, 1);
-    g.fillCircle(10, 10, 6);
-    g.fillCircle(17, 4, 3);
-    g.generateTexture("enemy-summoner", 20, 20);
-    g.clear();
-
-    // Guardian: shield-like shape (filled square with a cross)
-    g.fillStyle(0xd4a574, 1);
-    g.fillRect(2, 2, 16, 16);
-    g.lineStyle(2, 0x8b6914, 1);
-    g.beginPath();
-    g.moveTo(10, 2);
-    g.lineTo(10, 18);
-    g.moveTo(2, 10);
-    g.lineTo(18, 10);
-    g.strokePath();
-    g.generateTexture("enemy-guardian", 20, 20);
-    g.clear();
-
-    // Bomber: red circle with yellow X
-    g.fillStyle(0xff4444, 1);
-    g.fillCircle(10, 10, 8);
-    g.lineStyle(2, 0xffff00, 1);
-    g.beginPath();
-    g.moveTo(5, 5);
-    g.lineTo(15, 15);
-    g.moveTo(15, 5);
-    g.lineTo(5, 15);
-    g.strokePath();
-    g.generateTexture("enemy-bomber", 20, 20);
-    g.clear();
+    makeCharTexture("enemy-chaser", "鬼", 0xff595e);
+    makeCharTexture("enemy-shooter", "弓", 0x56cfe1);
+    makeCharTexture("enemy-rusher", "獣", 0xff924c);
+    makeCharTexture("enemy-splitter", "蟲", 0xc77dff);
+    makeCharTexture("enemy-summoner", "呪", 0x95d5b2);
+    makeCharTexture("enemy-guardian", "盾", 0xd4a574);
+    makeCharTexture("enemy-bomber", "爆", 0xff4444);
+    makeCharTexture("enemy-berserker", "狂", 0xdc143c);
+    makeCharTexture("enemy-shielder", "壁", 0x708090);
+    makeCharTexture("enemy-lancer", "槍", 0xdaa520);
 
     g.fillStyle(0xfff3b0, 1);
     g.fillRect(0, 0, 18, 18);
@@ -1176,7 +1133,7 @@ class DungeonScene extends Phaser.Scene {
       enemy.attribute = bossProfile?.attribute ?? pick(ATTRIBUTES);
       enemy.weakness = pick(ATTRIBUTES);
       enemy.resistance = pick(ATTRIBUTES);
-      enemy.maxHp = (18 + this.run.floor * 2 + (spawn.elite ? 24 : 0)) * (bossProfile?.maxHpMultiplier ?? 1) * (enemy.kind === "guardian" ? 1.5 : 1);
+      enemy.maxHp = (18 + this.run.floor * 2 + (spawn.elite ? 24 : 0)) * (bossProfile?.maxHpMultiplier ?? 1) * (enemy.kind === "guardian" || enemy.kind === "shielder" ? 1.5 : 1);
       enemy.hp = enemy.maxHp;
       enemy.speed = (50 + this.run.floor * 1.2 + (enemy.kind === "rusher" ? 25 : 0) + (enemy.kind === "guardian" ? -10 : 0) + (spawn.elite ? 22 : 0)) * (bossProfile?.speedMultiplier ?? 1);
       enemy.burnMs = 0;
@@ -1189,8 +1146,9 @@ class DungeonScene extends Phaser.Scene {
       enemy.bossAbilityCd = 0;
       enemy.strafeDir = Math.random() < 0.5 ? 1 : -1;
       enemy.zigzagTimer = 0;
-      enemy.chargeTimer = -1;
+      enemy.chargeTimer = (bossProfile?.kind ?? spawn.kind) === "lancer" ? 2000 : -1;
       enemy.wobblePhase = Math.random() * Math.PI * 2;
+      enemy.chargeDirection = new Phaser.Math.Vector2(0, 0);
       enemy.bossTag = bossProfile ? `boss-${this.run.floor}` : undefined;
       enemy.isDecoy = false;
       enemy.setDepth(3);
@@ -1262,6 +1220,7 @@ class DungeonScene extends Phaser.Scene {
       twin.zigzagTimer = 0;
       twin.chargeTimer = -1;
       twin.wobblePhase = Math.random() * Math.PI * 2;
+      twin.chargeDirection = new Phaser.Math.Vector2(0, 0);
       twin.bossTag = "twin-ice";
       twin.isDecoy = false;
       twin.setDepth(3);
@@ -1305,6 +1264,7 @@ class DungeonScene extends Phaser.Scene {
         decoy.zigzagTimer = 0;
         decoy.chargeTimer = -1;
         decoy.wobblePhase = Math.random() * Math.PI * 2;
+        decoy.chargeDirection = new Phaser.Math.Vector2(0, 0);
         decoy.bossTag = "shadow-decoy";
         decoy.isDecoy = true;
         decoy.setDepth(3);
@@ -1898,6 +1858,51 @@ class DungeonScene extends Phaser.Scene {
           this.killEnemy(enemy);
           return true;
         }
+      } else if (enemy.kind === "berserker") {
+        // Berserker: chaser that gets faster as HP drops
+        const hpRatio = enemy.hp / enemy.maxHp;
+        const berserkerMult = 1 + (1 - hpRatio) * 1.5;
+        const bSpeed = enemy.speed * berserkerMult;
+        this.safeSetVelocity(enemy,direction.x * bSpeed * speedMultiplier * bossPhaseMultiplier, direction.y * bSpeed * speedMultiplier * bossPhaseMultiplier);
+        // Visual: flash red when below 50% HP
+        if (hpRatio < 0.5) {
+          if (Math.floor(this.time.now / 200) % 2 === 0) {
+            enemy.setTintFill(0xff0000);
+          } else {
+            enemy.clearTint();
+            enemy.setTint(attributeColor(enemy.attribute));
+          }
+        }
+      } else if (enemy.kind === "shielder") {
+        // Shielder: slow approach toward player
+        const shielderSpeed = enemy.speed * 0.5;
+        this.safeSetVelocity(enemy,direction.x * shielderSpeed * speedMultiplier * bossPhaseMultiplier, direction.y * shielderSpeed * speedMultiplier * bossPhaseMultiplier);
+      } else if (enemy.kind === "lancer") {
+        // Lancer: stays at medium range, periodically charges
+        enemy.chargeTimer -= delta;
+        if (enemy.chargeTimer > 0) {
+          // Counting down to charge: approach slowly or maintain distance
+          const desired = distance > 250 ? 1 : distance < 150 ? -1 : 0;
+          if (desired === 0) {
+            const perpX = -direction.y * enemy.strafeDir;
+            const perpY = direction.x * enemy.strafeDir;
+            this.safeSetVelocity(enemy,perpX * enemy.speed * 0.5 * speedMultiplier, perpY * enemy.speed * 0.5 * speedMultiplier);
+          } else {
+            this.safeSetVelocity(enemy,direction.x * enemy.speed * 0.5 * desired * speedMultiplier, direction.y * enemy.speed * 0.5 * desired * speedMultiplier);
+          }
+        } else if (enemy.chargeTimer <= 0 && enemy.chargeTimer > -delta) {
+          // START charge: record direction toward player
+          enemy.chargeDirection = direction.clone();
+          enemy.chargeTimer = -1; // will continue counting down
+        } else if (enemy.chargeTimer > -300) {
+          // Charging: move fast in recorded direction
+          const chargeSpeed = enemy.speed * 4;
+          this.safeSetVelocity(enemy,enemy.chargeDirection.x * chargeSpeed * speedMultiplier, enemy.chargeDirection.y * chargeSpeed * speedMultiplier);
+        } else {
+          // Charge complete: reset timer
+          enemy.chargeTimer = 2000;
+          this.safeSetVelocity(enemy,0, 0);
+        }
       }
 
       if (enemy.kind === "summoner" && enemy.summonCooldown <= 0) {
@@ -1991,6 +1996,7 @@ class DungeonScene extends Phaser.Scene {
     minion.zigzagTimer = 0;
     minion.chargeTimer = -1;
     minion.wobblePhase = Math.random() * Math.PI * 2;
+    minion.chargeDirection = new Phaser.Math.Vector2(0, 0);
     minion.setCircle(8);
   }
 
@@ -2128,6 +2134,30 @@ class DungeonScene extends Phaser.Scene {
     const enemy = enemyObj as EnemySprite;
     if (!projectile.active || !enemy.active) {
       return;
+    }
+
+    // Shielder block: projectiles from the front (within 90 degrees of facing) are blocked
+    if (enemy.kind === "shielder" && projectile.body) {
+      const projBody = projectile.body as Phaser.Physics.Arcade.Body;
+      const projAngle = Math.atan2(projBody.velocity.y, projBody.velocity.x);
+      const enemyToPlayer = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
+      // Enemy faces toward player; projectile coming from front means projectile direction
+      // is roughly opposite to enemy's facing direction
+      let angleDiff = Math.abs(Phaser.Math.Angle.Wrap(projAngle - enemyToPlayer + Math.PI));
+      if (angleDiff < Math.PI / 2) {
+        // Blocked
+        const blockText = this.add.text(enemy.x, enemy.y - 20, "BLOCK", {
+          fontFamily: "Trebuchet MS, sans-serif",
+          fontSize: "12px",
+          color: "#ffffff"
+        }).setOrigin(0.5).setDepth(10);
+        this.tweens.add({ targets: blockText, y: enemy.y - 40, alpha: 0, duration: 600, onComplete: () => blockText.destroy() });
+        enemy.setTintFill(0xffffff);
+        this.time.delayedCall(80, () => { if (enemy.active) { enemy.clearTint(); enemy.setTint(attributeColor(enemy.attribute)); } });
+        projectile.piercing -= 1;
+        if (projectile.piercing <= 0) projectile.destroy();
+        return;
+      }
     }
 
     let damage = projectile.damage;
@@ -2365,7 +2395,10 @@ class DungeonScene extends Phaser.Scene {
     const killerName = enemy.bossTier > 0
       ? (BOSS_PROFILES[this.run.floor]?.name ?? `${enemy.attribute}のボス`)
       : `${enemy.attribute}の${enemy.kind}`;
-    const touchDmg = (enemy.kind === "rusher" ? 10 : 6) + this.run.floor * 0.4 + enemy.bossTier * 3;
+    let touchDmg = (enemy.kind === "rusher" ? 10 : enemy.kind === "lancer" && enemy.chargeTimer <= 0 && enemy.chargeTimer > -300 ? 15 + this.run.floor * 0.6 : 6) + this.run.floor * 0.4 + enemy.bossTier * 3;
+    if (enemy.kind === "berserker") {
+      touchDmg *= 1 + (1 - enemy.hp / enemy.maxHp);
+    }
     this.damagePlayer(touchDmg, enemy.attribute, false, killerName);
     if (this.run.player.armor.specialEffect === "Thorns" && enemy.active) {
       enemy.hp -= 3;

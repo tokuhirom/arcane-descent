@@ -10,7 +10,7 @@ export const TileType = {
 
 export type TileTypeValue = (typeof TileType)[keyof typeof TileType];
 export type RoomKind = "start" | "normal" | "stairs" | "boss";
-export type EnemyKind = "chaser" | "shooter" | "rusher" | "splitter" | "summoner" | "guardian" | "bomber";
+export type EnemyKind = "chaser" | "shooter" | "rusher" | "splitter" | "summoner" | "guardian" | "bomber" | "berserker" | "shielder" | "lancer";
 export type Attribute = "Fire" | "Ice" | "Thunder" | "Poison" | "None";
 
 export interface Room {
@@ -166,11 +166,12 @@ function buildMst(rooms: Room[], edges: Edge[]): Edge[] {
 }
 
 function pickEnemyKind(floor: number): EnemyKind {
-  const pool: EnemyKind[] = ["chaser", "shooter"];
-  if (floor >= 11) pool.push("bomber");
-  if (floor >= 21) pool.push("rusher", "guardian");
-  if (floor >= 41) pool.push("splitter");
-  if (floor >= 61) pool.push("summoner");
+  const pool: EnemyKind[] = ["chaser", "chaser", "shooter"];
+  if (floor >= 11) pool.push("bomber", "bomber", "lancer");
+  if (floor >= 21) pool.push("rusher", "guardian", "guardian", "berserker", "berserker", "guardian");
+  if (floor >= 31) pool.push("shielder", "shielder", "lancer");
+  if (floor >= 41) pool.push("splitter", "guardian");
+  if (floor >= 61) pool.push("summoner", "bomber");
   return pool[randomBetween(0, pool.length - 1)];
 }
 
