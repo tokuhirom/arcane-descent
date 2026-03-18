@@ -295,7 +295,8 @@ function buildMst(rooms: Room[], edges: Edge[]): Edge[] {
 }
 
 function pickEnemyKind(floor: number): EnemyKind {
-  const pool: EnemyKind[] = ["chaser", "chaser", "shooter"];
+  const pool: EnemyKind[] = ["chaser"];
+  if (floor >= 5) pool.push("shooter");
   if (floor >= 11) pool.push("bomber", "bomber", "lancer");
   if (floor >= 21) pool.push("rusher", "guardian", "guardian", "berserker", "berserker", "guardian");
   if (floor >= 31) pool.push("shielder", "shielder", "lancer");
@@ -441,7 +442,7 @@ export function generateDungeon(floor: number, seed = 0): DungeonLayout {
     }
 
     const area = room.width * room.height;
-    const floorScale = Math.min(1.3, 0.5 + floor * 0.05);
+    const floorScale = Math.min(1.3, 0.3 + floor * 0.05);
     const baseCount = Math.max(1, Math.floor(area / 22 * floorScale) + randomBetween(-1, 1));
     const count = room.kind === "stairs" ? Math.max(1, baseCount - 1) : baseCount;
     for (let i = 0; i < count; i += 1) {

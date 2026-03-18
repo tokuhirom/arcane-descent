@@ -1637,10 +1637,9 @@ class DungeonScene extends Phaser.Scene {
     });
   }
 
-  private showMeleeArc(angle: number, range: number, arcDeg: number, attribute: Attribute): void {
+  private showMeleeArc(angle: number, range: number, arcDeg: number, _attribute: Attribute): void {
     const g = this.add.graphics();
-    const color = attributeColor(attribute);
-    g.fillStyle(color, 0.35);
+    g.fillStyle(0x88ccff, 0.4);
     g.setDepth(4);
 
     if (arcDeg >= 360) {
@@ -2862,9 +2861,9 @@ class DungeonScene extends Phaser.Scene {
 
   private enemyMeleeSwing(enemy: EnemySprite, range: number, damage: number, cause: string): void {
     const swingAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
-    // Arc visual
+    // Arc visual (red tint for enemy attacks)
     const arcG = this.add.graphics();
-    arcG.fillStyle(attributeColor(enemy.attribute), 0.45);
+    arcG.fillStyle(0xff3333, 0.45);
     arcG.setDepth(4);
     arcG.slice(enemy.x, enemy.y, range, swingAngle - Phaser.Math.DegToRad(50), swingAngle + Phaser.Math.DegToRad(50), false);
     arcG.fillPath();
