@@ -119,8 +119,8 @@ export function processLevelUps(player: PlayerState): number {
 
 export function createDefaultPlayer(): PlayerState {
   return {
-    hp: 36,
-    maxHp: 36,
+    hp: 60,
+    maxHp: 60,
     xp: 0,
     level: 1,
     nextXp: 80,

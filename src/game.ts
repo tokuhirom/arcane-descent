@@ -206,8 +206,8 @@ function createStarterState(): RunState {
     seed: Date.now(),
     floor: 1,
     player: {
-      hp: 36,
-      maxHp: 36,
+      hp: 60,
+      maxHp: 60,
       xp: 0,
       level: 1,
       nextXp: 80,
@@ -362,7 +362,7 @@ function createRandomMelee(floor: number, style?: MeleeStyle): MeleeWeapon {
 const ARMOR_EFFECTS: ArmorEffect[] = ["Thorns", "Dodge", "Reflect", "Regen", "Speed"];
 
 function createDefaultArmor(): Armor {
-  return { name: "布のローブ", rarity: "Common", defense: 1, attribute: "None", specialEffect: null };
+  return { name: "布のローブ", rarity: "Common", defense: 3, attribute: "None", specialEffect: null };
 }
 
 function createRandomArmor(floor: number): Armor {
@@ -2862,12 +2862,20 @@ class DungeonScene extends Phaser.Scene {
 
   private enemyMeleeSwing(enemy: EnemySprite, range: number, damage: number, cause: string): void {
     const swingAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+    // Arc visual
     const arcG = this.add.graphics();
-    arcG.fillStyle(attributeColor(enemy.attribute), 0.35);
+    arcG.fillStyle(attributeColor(enemy.attribute), 0.45);
     arcG.setDepth(4);
-    arcG.slice(enemy.x, enemy.y, range, swingAngle - Phaser.Math.DegToRad(45), swingAngle + Phaser.Math.DegToRad(45), false);
+    arcG.slice(enemy.x, enemy.y, range, swingAngle - Phaser.Math.DegToRad(50), swingAngle + Phaser.Math.DegToRad(50), false);
     arcG.fillPath();
-    this.tweens.add({ targets: arcG, alpha: 0, duration: 100, onComplete: () => arcG.destroy() });
+    this.tweens.add({ targets: arcG, alpha: 0, duration: 150, onComplete: () => arcG.destroy() });
+    // Camera shake
+    this.cameras.main.shake(80, 0.005);
+    // Knockback
+    const kb = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y);
+    if (kb.lengthSq() > 0) {
+      this.knockbackVelocity = kb.normalize().scale(140);
+    }
     this.damagePlayer(damage, enemy.attribute, false, cause);
   }
 
