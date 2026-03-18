@@ -1555,7 +1555,7 @@ class DungeonScene extends Phaser.Scene {
 
       const target = activeEnemies[0];
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
-      if (dist > weapon.range) {
+      if (dist > weapon.range * 1.3) {
         return;
       }
       this.performMeleeSwing(weapon);
@@ -1743,6 +1743,10 @@ class DungeonScene extends Phaser.Scene {
         const cx = direction.x * Math.cos(zigzagAngle) - direction.y * Math.sin(zigzagAngle);
         const cy = direction.x * Math.sin(zigzagAngle) + direction.y * Math.cos(zigzagAngle);
         this.safeSetVelocity(enemy,cx * enemy.speed * speedMultiplier * bossPhaseMultiplier, cy * enemy.speed * speedMultiplier * bossPhaseMultiplier);
+        if (distance < 45 && enemy.fireCooldown <= 0) {
+          this.enemyMeleeSwing(enemy, 45, 5 + this.run.floor * 0.3, enemyDisplayName(enemy));
+          enemy.fireCooldown = 800;
+        }
       } else if (enemy.kind === "splitter") {
         // Wobbling sine-wave movement
         enemy.wobblePhase += delta * 0.006;
@@ -1815,20 +1819,12 @@ class DungeonScene extends Phaser.Scene {
           this.safeSetVelocity(enemy,direction.x * speed * speedMultiplier * bossPhaseMultiplier, direction.y * speed * speedMultiplier * bossPhaseMultiplier);
         }
       } else if (enemy.kind === "guardian") {
-        // Guardian: slow chaser that performs melee swings
+        // Guardian: slow chaser with long-range melee swing
         const guardianSpeed = enemy.speed * 0.7;
         this.safeSetVelocity(enemy,direction.x * guardianSpeed * speedMultiplier * bossPhaseMultiplier, direction.y * guardianSpeed * speedMultiplier * bossPhaseMultiplier);
-        if (distance < 40 && enemy.fireCooldown <= 0) {
-          const swingAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
-          const arcG = this.add.graphics();
-          arcG.fillStyle(attributeColor(enemy.attribute), 0.35);
-          arcG.setDepth(4);
-          arcG.slice(enemy.x, enemy.y, 40, swingAngle - Phaser.Math.DegToRad(45), swingAngle + Phaser.Math.DegToRad(45), false);
-          arcG.fillPath();
-          this.tweens.add({ targets: arcG, alpha: 0, duration: 100, onComplete: () => arcG.destroy() });
-          const guardianDmg = 8 + this.run.floor * 0.5;
-          this.damagePlayer(guardianDmg, enemy.attribute, false, `${enemy.attribute}のguardian`);
-          enemy.fireCooldown = 800;
+        if (distance < 60 && enemy.fireCooldown <= 0) {
+          this.enemyMeleeSwing(enemy, 60, 8 + this.run.floor * 0.5, enemyDisplayName(enemy));
+          enemy.fireCooldown = 700;
         }
       } else if (enemy.kind === "bomber") {
         // Bomber: chases player, self-destructs when low HP and close
@@ -1872,12 +1868,16 @@ class DungeonScene extends Phaser.Scene {
           return true;
         }
       } else if (enemy.kind === "berserker") {
-        // Berserker: chaser that gets faster as HP drops
+        // Berserker: chaser that gets faster and hits harder as HP drops
         const hpRatio = enemy.hp / enemy.maxHp;
         const berserkerMult = 1 + (1 - hpRatio) * 1.5;
         const bSpeed = enemy.speed * berserkerMult;
         this.safeSetVelocity(enemy,direction.x * bSpeed * speedMultiplier * bossPhaseMultiplier, direction.y * bSpeed * speedMultiplier * bossPhaseMultiplier);
-        // Visual: flash red when below 50% HP
+        if (distance < 55 && enemy.fireCooldown <= 0) {
+          const dmg = (6 + this.run.floor * 0.4) * (1 + (1 - hpRatio));
+          this.enemyMeleeSwing(enemy, 55, dmg, enemyDisplayName(enemy));
+          enemy.fireCooldown = Math.max(300, 600 - Math.floor((1 - hpRatio) * 300));
+        }
         if (hpRatio < 0.5) {
           if (Math.floor(this.time.now / 200) % 2 === 0) {
             enemy.setTintFill(0xff0000);
@@ -1887,9 +1887,13 @@ class DungeonScene extends Phaser.Scene {
           }
         }
       } else if (enemy.kind === "shielder") {
-        // Shielder: slow approach toward player
+        // Shielder: slow approach, shield bash at range
         const shielderSpeed = enemy.speed * 0.5;
         this.safeSetVelocity(enemy,direction.x * shielderSpeed * speedMultiplier * bossPhaseMultiplier, direction.y * shielderSpeed * speedMultiplier * bossPhaseMultiplier);
+        if (distance < 50 && enemy.fireCooldown <= 0) {
+          this.enemyMeleeSwing(enemy, 50, 7 + this.run.floor * 0.4, enemyDisplayName(enemy));
+          enemy.fireCooldown = 900;
+        }
       } else if (enemy.kind === "lancer") {
         // Lancer: stays at medium range, periodically charges
         enemy.chargeTimer -= delta;
@@ -2854,6 +2858,17 @@ class DungeonScene extends Phaser.Scene {
         this.messageText.setAlpha(1);
       }
     }
+  }
+
+  private enemyMeleeSwing(enemy: EnemySprite, range: number, damage: number, cause: string): void {
+    const swingAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+    const arcG = this.add.graphics();
+    arcG.fillStyle(attributeColor(enemy.attribute), 0.35);
+    arcG.setDepth(4);
+    arcG.slice(enemy.x, enemy.y, range, swingAngle - Phaser.Math.DegToRad(45), swingAngle + Phaser.Math.DegToRad(45), false);
+    arcG.fillPath();
+    this.tweens.add({ targets: arcG, alpha: 0, duration: 100, onComplete: () => arcG.destroy() });
+    this.damagePlayer(damage, enemy.attribute, false, cause);
   }
 
   private showDamageNumber(x: number, y: number, amount: number, color = "#ffffff", big = false): void {
