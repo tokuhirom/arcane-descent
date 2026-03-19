@@ -221,7 +221,7 @@ function createStarterState(): RunState {
         S: 4,
         T: 4
       },
-      weapon: { type: "melee" as const, name: "錆びた剣", attribute: "None" as Attribute, rarity: "Common" as Rarity, damage: 6, range: 44, swingRate: 500, arc: 120, specialEffects: [] },
+      weapon: { type: "melee" as const, name: "錆びた剣", attribute: "None" as Attribute, rarity: "Common" as Rarity, damage: 8, range: 44, swingRate: 500, arc: 120, specialEffects: [] },
       armor: createDefaultArmor(),
       burnMs: 0,
       iceMs: 0,
@@ -1143,7 +1143,7 @@ class DungeonScene extends Phaser.Scene {
       enemy.attribute = bossProfile?.attribute ?? pick(ATTRIBUTES);
       enemy.weakness = pick(ATTRIBUTES);
       enemy.resistance = pick(ATTRIBUTES);
-      enemy.maxHp = (30 + this.run.floor * 3 + (spawn.elite ? 30 : 0)) * (bossProfile?.maxHpMultiplier ?? 1) * (enemy.kind === "guardian" || enemy.kind === "shielder" ? 1.5 : 1);
+      enemy.maxHp = (20 + this.run.floor * 3 + (spawn.elite ? 24 : 0)) * (bossProfile?.maxHpMultiplier ?? 1) * (enemy.kind === "guardian" || enemy.kind === "shielder" ? 1.5 : 1);
       enemy.hp = enemy.maxHp;
       enemy.speed = (50 + this.run.floor * 1.2 + (enemy.kind === "rusher" ? 25 : 0) + (enemy.kind === "guardian" ? -10 : 0) + (spawn.elite ? 22 : 0)) * (bossProfile?.speedMultiplier ?? 1);
       enemy.burnMs = 0;
