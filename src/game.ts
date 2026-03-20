@@ -1592,8 +1592,8 @@ class DungeonScene extends Phaser.Scene {
   private activateParry(): void {
     if (this.parryCooldown > 0 || this.parryActive) return;
     this.parryActive = true;
-    this.parryTimer = 200;
-    this.parryCooldown = 800;
+    this.parryTimer = 300;
+    this.parryCooldown = 600;
     // Visual: bright flash on button
     this.attackButton?.setScale(1.15).setFillStyle(0x40a0ff, 0.9);
     // Visual: blue ring around player
@@ -2433,7 +2433,8 @@ class DungeonScene extends Phaser.Scene {
     if (shouldDrop && Math.random() < 0.015) {
       this.spawnArmorDrop(enemy.x + 10, enemy.y, createRandomArmor(this.run.floor + this.run.player.stats.F));
     }
-    if (shouldDrop && Math.random() < 0.06) {
+    const potionRate = this.run.floor <= 10 ? 0.15 : 0.06;
+    if (shouldDrop && Math.random() < potionRate) {
       this.spawnPotion(enemy.x, enemy.y);
     }
     if (this.run.player.armor.specialEffect === "Regen") {
@@ -2583,7 +2584,7 @@ class DungeonScene extends Phaser.Scene {
       this.run.player.hitInvulnMs = Math.max(this.run.player.hitInvulnMs, 300);
       // Successful parry resets cooldown — chain parries!
       this.parryCooldown = 0;
-      this.parryTimer = 200;
+      this.parryTimer = 300;
       this.parryActive = true;
       return;
     }
