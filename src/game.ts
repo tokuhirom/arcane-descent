@@ -118,7 +118,7 @@ interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
   chainHits: number;
 }
 
-const SAVE_VERSION = 5;
+const SAVE_VERSION = 6;
 
 interface RunState {
   saveVersion: number;
@@ -222,7 +222,7 @@ function createStarterState(): RunState {
         S: 4,
         T: 4
       },
-      weapon: { type: "melee" as const, name: "錆びた剣", attribute: "None" as Attribute, rarity: "Common" as Rarity, damage: 8, range: 44, swingRate: 500, arc: 120, specialEffects: [] },
+      weapon: createRandomWand(1, true),
       armor: createDefaultArmor(),
       burnMs: 0,
       iceMs: 0,
@@ -2424,7 +2424,7 @@ class DungeonScene extends Phaser.Scene {
     this.run.player.xp += gainedXp;
     const shouldDrop = !skipDrops && !enemy.selfDestructed;
     if (shouldDrop && Math.random() < 0.015 + this.run.player.stats.F * 0.003) {
-      if (Math.random() < 0.5) {
+      if (Math.random() < 0.85) {
         this.spawnWandDrop(enemy.x, enemy.y, createRandomWand(this.run.floor + this.run.player.stats.F));
       } else {
         this.spawnMeleeDrop(enemy.x, enemy.y, createRandomMelee(this.run.floor + this.run.player.stats.F));
@@ -2446,7 +2446,7 @@ class DungeonScene extends Phaser.Scene {
       this.bossDoors.clear(true, true);
       this.stairs.setData("unlocked", true);
       this.stairs.setVisible(true);
-      if (Math.random() < 0.5) {
+      if (Math.random() < 0.85) {
         this.spawnWandDrop(enemy.x + 48, enemy.y - 36, createRandomWand(this.run.floor + 8 + this.run.player.stats.F));
       } else {
         this.spawnMeleeDrop(enemy.x + 48, enemy.y - 36, createRandomMelee(this.run.floor + 8 + this.run.player.stats.F));
@@ -2696,9 +2696,9 @@ class DungeonScene extends Phaser.Scene {
     const chest = (obj1 === this.player ? obj2 : obj1) as Phaser.Physics.Arcade.Image;
     sfx.play("pickup");
     const roll = Math.random();
-    if (roll < 0.35) {
+    if (roll < 0.55) {
       this.spawnWandDrop(chest.x, chest.y, createRandomWand(this.run.floor + 4 + this.run.player.stats.F));
-    } else if (roll < 0.7) {
+    } else if (roll < 0.65) {
       this.spawnMeleeDrop(chest.x, chest.y, createRandomMelee(this.run.floor + 4 + this.run.player.stats.F));
     } else {
       this.spawnArmorDrop(chest.x, chest.y, createRandomArmor(this.run.floor + 4 + this.run.player.stats.F));
