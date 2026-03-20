@@ -2070,26 +2070,38 @@ class DungeonScene extends Phaser.Scene {
       return true;
     });
 
+    const decayProjectile = (projectile: ProjectileSprite, delta: number): boolean => {
+      if (!projectile.body) return true;
+      const body = projectile.body as Phaser.Physics.Arcade.Body;
+      // Decelerate: lose 15% speed per second
+      const decay = 1 - 0.15 * (delta / 1000);
+      body.velocity.scale(decay);
+      // Fade out as it slows
+      const speed = body.velocity.length();
+      projectile.setAlpha(Math.min(1, speed / 80));
+      projectile.lifetimeMs -= delta;
+      // Destroy if too slow, expired, or in wall
+      if (speed < 30 || projectile.lifetimeMs <= 0 || this.isProjectileInWall(projectile)) {
+        projectile.destroy();
+        return true;
+      }
+      return false;
+    };
+
     this.projectiles.children.iterate((child) => {
       const projectile = child as ProjectileSprite | null;
       if (!projectile || !projectile.active) return true;
       if (projectile.specialEffects.includes("Homing")) {
         this.applyProjectileHoming(projectile, 0.03);
       }
-      projectile.lifetimeMs -= delta;
-      if (projectile.lifetimeMs <= 0 || this.isProjectileInWall(projectile)) {
-        projectile.destroy();
-      }
+      decayProjectile(projectile, delta);
       return true;
     });
 
     this.enemyProjectiles.children.iterate((child) => {
       const projectile = child as ProjectileSprite | null;
       if (!projectile || !projectile.active) return true;
-      projectile.lifetimeMs -= delta;
-      if (projectile.lifetimeMs <= 0 || this.isProjectileInWall(projectile)) {
-        projectile.destroy();
-      }
+      decayProjectile(projectile, delta);
       return true;
     });
   }
@@ -3257,11 +3269,16 @@ const ENEMY_NAMES: Record<string, string> = {
   bomber: "爆弾魔", berserker: "狂戦士", shielder: "壁兵", lancer: "槍兵"
 };
 
+const ATTRIBUTE_NAMES: Record<string, string> = {
+  Fire: "火", Ice: "氷", Thunder: "雷", Poison: "毒", None: ""
+};
+
 function enemyDisplayName(enemy: EnemySprite): string {
   if (enemy.bossTier > 0) {
     return BOSS_PROFILES[Math.floor(enemy.bossTier * 10)]?.name ?? "ボス";
   }
-  return `${enemy.attribute === "None" ? "" : enemy.attribute + "の"}${ENEMY_NAMES[enemy.kind] ?? enemy.kind}`;
+  const attr = ATTRIBUTE_NAMES[enemy.attribute] ?? "";
+  return attr ? `${attr}の${ENEMY_NAMES[enemy.kind] ?? enemy.kind}` : (ENEMY_NAMES[enemy.kind] ?? enemy.kind);
 }
 
 function attributeColor(attribute: Attribute): number {
