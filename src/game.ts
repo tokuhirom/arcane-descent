@@ -2167,15 +2167,31 @@ class DungeonScene extends Phaser.Scene {
     const cdScale = phase === 1 ? 1 : phase === 2 ? 0.65 : 0.4;
 
     if (floor === 10) {
-      // F10 "炎の魔獣" - fire trail (more in later phases)
-      for (let i = 0; i < phase; i++) {
-        this.spawnGroundHazard(
-          enemy.x + Phaser.Math.Between(-16, 16),
-          enemy.y + Phaser.Math.Between(-16, 16),
-          "Fire", 3500
-        );
+      // F10 "炎の魔獣" - 3-step cycle: bullet ring → charge+fire → aimed burst
+      const cycle = Math.floor(this.time.now / 2500) % 3;
+      if (cycle === 0) {
+        // Bullet ring (parry opportunity!)
+        const count = 4 + phase * 3;
+        const offset = this.time.now * 0.003;
+        for (let i = 0; i < count; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / count) + offset));
+        }
+        this.safeSetVelocity(enemy, 0, 0);
+      } else if (cycle === 1) {
+        // Charge + fire trail
+        for (let i = 0; i < phase; i++) {
+          this.spawnGroundHazard(enemy.x + Phaser.Math.Between(-20, 20), enemy.y + Phaser.Math.Between(-20, 20), "Fire", 4000);
+        }
+        const dir = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize();
+        this.safeSetVelocity(enemy, dir.x * enemy.speed * 2.5, dir.y * enemy.speed * 2.5);
+      } else {
+        // Aimed spread at player
+        const shots = 2 + phase;
+        for (let i = 0; i < shots; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad((i - Math.floor(shots / 2)) * 15));
+        }
       }
-      enemy.bossAbilityCd = 500 * cdScale;
+      enemy.bossAbilityCd = Math.max(300, 800 * cdScale);
     } else if (floor === 20) {
       // F20 "氷の巨人" - ice pillars near player (more pillars in phases)
       for (let i = 0; i < phase + 1; i++) {
