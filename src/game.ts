@@ -1048,16 +1048,18 @@ class DungeonScene extends Phaser.Scene {
       .setScrollFactor(0).setDepth(15);
     this.killLogText = makeText(this, GAME_WIDTH - 160, 190, "", 11, "#aaaaaa").setScrollFactor(0);
     this.killLog = [];
-    this.soundButton = makeText(this, GAME_WIDTH - 130, GAME_HEIGHT - 90, sfx.muted ? "[x]" : "[♪]", 24, "#f8f1ff")
+    this.soundButton = makeText(this, GAME_WIDTH - 80, 40, sfx.muted ? "[x]" : "[♪]", 20, "#f8f1ff")
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setDepth(10);
     this.soundButton.on("pointerdown", () => {
       sfx.toggleMute();
       this.soundButton.setText(sfx.muted ? "[x]" : "[♪]");
     });
-    this.pauseButton = makeText(this, GAME_WIDTH - 64, GAME_HEIGHT - 90, "[II]", 24, "#f8f1ff")
+    this.pauseButton = makeText(this, GAME_WIDTH - 40, 40, "[II]", 20, "#f8f1ff")
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setDepth(10);
     this.pauseButton.on("pointerdown", () => {
       this.pauseWithJoystickReset();
       this.scene.launch("PauseScene");
