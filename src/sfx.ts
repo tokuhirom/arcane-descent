@@ -7,7 +7,8 @@ type SfxName =
   | "pickup"
   | "stairs"
   | "gameOver"
-  | "bossAlert";
+  | "bossAlert"
+  | "parry";
 
 export class SfxManager {
   private ctx: AudioContext | null = null;
@@ -77,6 +78,9 @@ export class SfxManager {
         break;
       case "bossAlert":
         this.playBossAlert(ctx);
+        break;
+      case "parry":
+        this.playParry(ctx);
         break;
     }
   }
@@ -189,5 +193,14 @@ export class SfxManager {
     this.osc(ctx, "sawtooth", 55, 0.15, t, 0.5, 40);
     this.osc(ctx, "sine", 80, 0.2, t, 0.4, 50);
     this.noise(ctx, 0.08, t, 0.3);
+  }
+
+  private playParry(ctx: AudioContext): void {
+    const t = ctx.currentTime;
+    // Sharp metallic "kin!" — high freq square + sine ping
+    this.osc(ctx, "square", 1800, 0.12, t, 0.06, 2400);
+    this.osc(ctx, "sine", 2200, 0.18, t + 0.01, 0.08, 3200);
+    this.osc(ctx, "sine", 1200, 0.08, t + 0.02, 0.12);
+    this.noise(ctx, 0.06, t, 0.04);
   }
 }
