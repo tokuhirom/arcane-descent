@@ -2193,42 +2193,138 @@ class DungeonScene extends Phaser.Scene {
       }
       enemy.bossAbilityCd = Math.max(300, 800 * cdScale);
     } else if (floor === 20) {
-      // F20 "氷の巨人" - ice pillars near player (more pillars in phases)
-      for (let i = 0; i < phase + 1; i++) {
-        this.spawnIcePillar(
-          this.player.x + Phaser.Math.Between(-80, 80),
-          this.player.y + Phaser.Math.Between(-80, 80),
-          4000
-        );
+      // F20 "氷の巨人" - slow barrage + ice cage + sweep
+      const cycle = Math.floor(this.time.now / 3000) % 3;
+      if (cycle === 0) {
+        // Slow aimed barrage (parry opportunity)
+        const shots = 3 + phase * 2;
+        for (let i = 0; i < shots; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad((i - Math.floor(shots / 2)) * 10));
+        }
+        this.safeSetVelocity(enemy, 0, 0);
+      } else if (cycle === 1) {
+        // Ice cage: pillars surrounding player (forces movement)
+        for (let i = 0; i < 3 + phase; i++) {
+          const angle = Phaser.Math.DegToRad(i * (360 / (3 + phase)));
+          this.spawnIcePillar(
+            this.player.x + Math.cos(angle) * 60,
+            this.player.y + Math.sin(angle) * 60,
+            3000
+          );
+        }
+      } else {
+        // Sweeping arc of bullets
+        const count = 5 + phase * 2;
+        const baseAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+        for (let i = 0; i < count; i++) {
+          this.spawnEnemyProjectile(enemy, baseAngle + Phaser.Math.DegToRad((i - count / 2) * 8) - Math.PI / 2);
+        }
       }
-      enemy.bossAbilityCd = 2000 * cdScale;
+      enemy.bossAbilityCd = Math.max(400, 1000 * cdScale);
     } else if (floor === 30) {
-      // F30 "雷の鳥" - omni-directional lightning (more directions in phases)
-      const directions = 8 + phase * 4;
-      for (let i = 0; i < directions; i += 1) {
-        this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / directions)));
+      // F30 "雷の鳥" - teleport dash + spiral + scatter
+      const cycle = Math.floor(this.time.now / 2000) % 3;
+      if (cycle === 0) {
+        // Spiral bullet pattern (visually impressive, parryable)
+        const count = 6 + phase * 2;
+        const offset = this.time.now * 0.005;
+        for (let i = 0; i < count; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / count) + offset));
+        }
+      } else if (cycle === 1) {
+        // Dash to random position + burst on arrival
+        const room = this.layout.rooms.find((r) => r.id === this.layout.bossRoomId);
+        if (room) {
+          enemy.x = (room.x + 2 + Math.random() * (room.width - 4)) * TILE_SIZE;
+          enemy.y = (room.y + 2 + Math.random() * (room.height - 4)) * TILE_SIZE;
+          const count = 8 + phase * 2;
+          for (let i = 0; i < count; i++) {
+            this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / count)));
+          }
+        }
+      } else {
+        // Fast aimed triple shot
+        for (let i = 0; i < 3; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad((i - 1) * 20));
+        }
+        if (phase >= 2) {
+          this.time.delayedCall(200, () => {
+            if (enemy.active) {
+              for (let i = 0; i < 3; i++) {
+                this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad((i - 1) * 20));
+              }
+            }
+          });
+        }
       }
-      enemy.bossAbilityCd = 1800 * cdScale;
+      enemy.bossAbilityCd = Math.max(300, 700 * cdScale);
     } else if (floor === 40) {
-      // F40 "毒の蜘蛛" - poison swamps (multiple in later phases)
-      for (let i = 0; i < phase + 1; i++) {
-        this.spawnGroundHazard(
-          this.player.x + Phaser.Math.Between(-60, 60),
-          this.player.y + Phaser.Math.Between(-60, 60),
-          "Poison", 5000
-        );
+      // F40 "毒の蜘蛛" - poison zone + summon + web shots
+      const cycle = Math.floor(this.time.now / 2500) % 3;
+      if (cycle === 0) {
+        // Poison zones around the arena
+        for (let i = 0; i < 2 + phase; i++) {
+          this.spawnGroundHazard(
+            this.player.x + Phaser.Math.Between(-80, 80),
+            this.player.y + Phaser.Math.Between(-80, 80),
+            "Poison", 5000
+          );
+        }
+        // Also slow aimed shots
+        for (let i = 0; i < phase + 1; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(Phaser.Math.Between(-30, 30)));
+        }
+      } else if (cycle === 1) {
+        // Web burst: ring of bullets that slow down (parry these!)
+        const count = 6 + phase * 2;
+        for (let i = 0; i < count; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / count)));
+        }
+        this.safeSetVelocity(enemy, 0, 0);
+      } else {
+        // Rapid aimed shots while retreating
+        const dir = new Phaser.Math.Vector2(enemy.x - this.player.x, enemy.y - this.player.y).normalize();
+        this.safeSetVelocity(enemy, dir.x * enemy.speed * 1.5, dir.y * enemy.speed * 1.5);
+        for (let i = 0; i < 2 + phase; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(Phaser.Math.Between(-10, 10)));
+        }
       }
-      enemy.bossAbilityCd = 1500 * cdScale;
+      enemy.bossAbilityCd = Math.max(400, 900 * cdScale);
     } else if (floor === 100) {
-      // F100 "深淵の王" - edge projectiles from phase 2+, all phases have bursts
-      if (phase >= 2) {
-        this.spawnEdgeProjectiles(enemy);
+      // F100 "深淵の王" - all patterns combined
+      const cycle = Math.floor(this.time.now / 2000) % 4;
+      if (cycle === 0) {
+        // Spiral rings
+        const count = 8 + phase * 3;
+        const offset = this.time.now * 0.004;
+        for (let i = 0; i < count; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / count) + offset));
+        }
+      } else if (cycle === 1) {
+        // Edge projectiles converging
+        if (phase >= 2) this.spawnEdgeProjectiles(enemy);
+        // Plus aimed burst
+        const shots = 3 + phase;
+        for (let i = 0; i < shots; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad((i - Math.floor(shots / 2)) * 12));
+        }
+      } else if (cycle === 2) {
+        // Ground hazards + charge
+        for (let i = 0; i < phase + 1; i++) {
+          const attr = (["Fire", "Poison"] as Attribute[])[i % 2];
+          this.spawnGroundHazard(this.player.x + Phaser.Math.Between(-60, 60), this.player.y + Phaser.Math.Between(-60, 60), attr, 4000);
+        }
+        const dir = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize();
+        this.safeSetVelocity(enemy, dir.x * enemy.speed * 2, dir.y * enemy.speed * 2);
+      } else {
+        // Double spiral
+        const count = 6 + phase * 2;
+        for (let i = 0; i < count; i++) {
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / count)));
+          this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / count) + 180 / count));
+        }
       }
-      const burstCount = 4 + phase * 2;
-      for (let i = 0; i < burstCount; i++) {
-        this.spawnEnemyProjectile(enemy, Phaser.Math.DegToRad(i * (360 / burstCount)));
-      }
-      enemy.bossAbilityCd = 2000 * cdScale;
+      enemy.bossAbilityCd = Math.max(250, 800 * cdScale);
     } else {
       enemy.bossAbilityCd = 5000;
     }
