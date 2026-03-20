@@ -1190,7 +1190,8 @@ class DungeonScene extends Phaser.Scene {
 
   private spawnEncounters(): void {
     this.layout.spawns.forEach((spawn) => {
-      const enemy = this.enemies.create(spawn.x * TILE_SIZE, spawn.y * TILE_SIZE, `enemy-${spawn.kind}`) as EnemySprite;
+      const spawnPos = this.findWalkableNear(spawn.x * TILE_SIZE, spawn.y * TILE_SIZE);
+      const enemy = this.enemies.create(spawnPos.x, spawnPos.y, `enemy-${spawn.kind}`) as EnemySprite;
       const bossProfile = spawn.roomId === this.layout.bossRoomId ? BOSS_PROFILES[this.run.floor] : undefined;
       enemy.roomId = spawn.roomId;
       enemy.kind = bossProfile?.kind ?? spawn.kind;
@@ -1497,20 +1498,31 @@ class DungeonScene extends Phaser.Scene {
       return;
     }
     const body = bodyOwner.body as Phaser.Physics.Arcade.Body;
-    const left = Math.floor((bodyOwner.x - body.halfWidth) / TILE_SIZE);
-    const right = Math.floor((bodyOwner.x + body.halfWidth) / TILE_SIZE);
-    const top = Math.floor((bodyOwner.y - body.halfHeight) / TILE_SIZE);
-    const bottom = Math.floor((bodyOwner.y + body.halfHeight) / TILE_SIZE);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const left = Math.floor((bodyOwner.x - body.halfWidth) / TILE_SIZE);
+      const right = Math.floor((bodyOwner.x + body.halfWidth) / TILE_SIZE);
+      const top = Math.floor((bodyOwner.y - body.halfHeight) / TILE_SIZE);
+      const bottom = Math.floor((bodyOwner.y + body.halfHeight) / TILE_SIZE);
 
-    for (let y = top; y <= bottom; y += 1) {
-      for (let x = left; x <= right; x += 1) {
-        if (!this.isWalkable(x, y)) {
-          bodyOwner.x = Phaser.Math.Clamp(bodyOwner.x, TILE_SIZE * 2, this.layout.width * TILE_SIZE - TILE_SIZE * 2);
-          bodyOwner.y = Phaser.Math.Clamp(bodyOwner.y, TILE_SIZE * 2, this.layout.height * TILE_SIZE - TILE_SIZE * 2);
-          bodyOwner.body.stop();
-          return;
+      let pushed = false;
+      for (let y = top; y <= bottom; y += 1) {
+        for (let x = left; x <= right; x += 1) {
+          if (!this.isWalkable(x, y)) {
+            // Push away from the wall tile center
+            const wallCx = x * TILE_SIZE + TILE_SIZE / 2;
+            const wallCy = y * TILE_SIZE + TILE_SIZE / 2;
+            const dx = bodyOwner.x - wallCx;
+            const dy = bodyOwner.y - wallCy;
+            if (Math.abs(dx) > Math.abs(dy)) {
+              bodyOwner.x += dx > 0 ? 2 : -2;
+            } else {
+              bodyOwner.y += dy > 0 ? 2 : -2;
+            }
+            pushed = true;
+          }
         }
       }
+      if (!pushed) break;
     }
   }
 
