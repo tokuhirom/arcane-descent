@@ -105,6 +105,7 @@ interface EnemySprite extends Phaser.Physics.Arcade.Sprite {
   chargeTimer: number;
   wobblePhase: number;
   chargeDirection: Phaser.Math.Vector2;
+  rangedCooldown: number;
 }
 
 interface ProjectileSprite extends Phaser.Physics.Arcade.Image {
@@ -525,7 +526,7 @@ class TitleScene extends Phaser.Scene {
     makeText(this, 56, 160, "Arcane", 46, "#f4d35e");
     makeText(this, 56, 214, "Descent", 58, "#f8f1ff");
     makeText(this, 56, 320, "ローグライト / ダンジョン探索", 22, "#cdb4db");
-    makeText(this, 56, 362, "移動のみ。弾は自動射撃。", 20, "#d9d9ff");
+    makeText(this, 56, 362, "移動+パリィ。弾は自動射撃。", 20, "#d9d9ff");
 
     const saved = loadRun();
     let btnY = 520;
@@ -547,18 +548,18 @@ class TitleScene extends Phaser.Scene {
 
     makeText(this, 56, 680, `Build: ${__BUILD_TIME_JST__}`, 16, "#9ad1ff");
     makeText(this, 56, 706, `Commit: ${__COMMIT_HASH__}`, 16, "#9ad1ff");
-    makeText(this, 56, 760, "PC: WASD移動 / SPACE攻撃", 18, "#f8f1ff");
-    makeText(this, 56, 788, "Mobile: 左手移動 / 右手ATK", 18, "#f8f1ff");
+    makeText(this, 56, 760, "PC: WASD移動 / SPACEパリィ", 18, "#f8f1ff");
+    makeText(this, 56, 788, "Mobile: 左手移動 / 右手パリィ", 18, "#f8f1ff");
 
     const isLefty = localStorage.getItem("arcane-lefty") === "true";
     const handBtn = this.add.rectangle(GAME_WIDTH / 2, 840, 260, 40, 0x241734, 1)
       .setStrokeStyle(1, 0x9d4edd)
       .setInteractive({ useHandCursor: true });
-    const handLabel = makeText(this, GAME_WIDTH / 2 - 100, 828, isLefty ? "操作: 右手移動 / 左手ATK" : "操作: 左手移動 / 右手ATK", 16, "#cdb4db");
+    const handLabel = makeText(this, GAME_WIDTH / 2 - 100, 828, isLefty ? "操作: 右手移動 / 左手パリィ" : "操作: 左手移動 / 右手パリィ", 16, "#cdb4db");
     handBtn.on("pointerdown", () => {
       const newLefty = localStorage.getItem("arcane-lefty") !== "true";
       localStorage.setItem("arcane-lefty", String(newLefty));
-      handLabel.setText(newLefty ? "操作: 右手移動 / 左手ATK" : "操作: 左手移動 / 右手ATK");
+      handLabel.setText(newLefty ? "操作: 右手移動 / 左手パリィ" : "操作: 左手移動 / 右手パリィ");
     });
 
     this.input.keyboard?.once("keydown-SPACE", () => saved ? this.continueRun(saved) : this.startRun());
@@ -912,7 +913,10 @@ class DungeonScene extends Phaser.Scene {
   private joystickPointer?: Phaser.Input.Pointer;
   private attackButton!: Phaser.GameObjects.Arc;
   private attackLabel!: Phaser.GameObjects.Text;
-  private attackPressed = false;
+  private parryActive = false;
+  private parryTimer = 0;
+  private parryCooldown = 0;
+  private parryGraphics?: Phaser.GameObjects.Graphics;
   private knockbackVelocity = new Phaser.Math.Vector2();
   private lastAimDirection = new Phaser.Math.Vector2(1, 0);
   private isDying = false;
@@ -943,7 +947,9 @@ class DungeonScene extends Phaser.Scene {
     this.enemyUpdateFrame = 0;
     this.bossDoorLocked = false;
     this.fireTimer = 0;
-    this.attackPressed = false;
+    this.parryActive = false;
+    this.parryTimer = 0;
+    this.parryCooldown = 0;
     this.knockbackVelocity.set(0, 0);
     this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys);
     this.wasd = this.input.keyboard?.addKeys("W,A,S,D") as Record<string, Phaser.Input.Keyboard.Key>;
@@ -1057,39 +1063,31 @@ class DungeonScene extends Phaser.Scene {
       this.scene.launch("PauseScene");
     });
 
-    // Attack button (right side by default, configurable)
+    // Parry button (right side by default, configurable)
     const leftHanded = localStorage.getItem("arcane-lefty") === "true";
     const atkX = leftHanded ? 92 : GAME_WIDTH - 92;
-    this.attackButton = this.add.circle(atkX, GAME_HEIGHT - 120, 36, 0x6b2fa0, 0.7)
+    this.attackButton = this.add.circle(atkX, GAME_HEIGHT - 120, 36, 0x2060a0, 0.7)
       .setScrollFactor(0)
       .setDepth(20)
       .setInteractive({ useHandCursor: true });
-    this.attackLabel = makeText(this, atkX - 20, GAME_HEIGHT - 134, "ATK", 22, "#f8f1ff")
+    this.attackLabel = makeText(this, atkX - 12, GAME_HEIGHT - 134, "防", 22, "#f8f1ff")
       .setScrollFactor(0)
       .setDepth(21);
     this.attackButton.on("pointerdown", () => {
       if (this.isDialogOpen || this.scene.isPaused()) return;
-      this.attackPressed = true;
-      this.attackButton.setScale(1.15).setFillStyle(0x9b4fd0, 0.9);
+      this.activateParry();
     });
     this.attackButton.on("pointerup", () => {
-      this.attackPressed = false;
-      this.attackButton.setScale(1.0).setFillStyle(0x6b2fa0, 0.7);
+      // Parry is instant; no action on release
     });
     this.attackButton.on("pointerout", () => {
-      this.attackPressed = false;
-      this.attackButton.setScale(1.0).setFillStyle(0x6b2fa0, 0.7);
+      // Parry is instant; no action on pointer out
     });
 
-    // PC: SPACE key for attack
+    // PC: SPACE key for parry (single press)
     this.input.keyboard?.on("keydown-SPACE", () => {
       if (this.isDialogOpen || this.scene.isPaused()) return;
-      this.attackPressed = true;
-      this.attackButton.setScale(1.15).setFillStyle(0x9b4fd0, 0.9);
-    });
-    this.input.keyboard?.on("keyup-SPACE", () => {
-      this.attackPressed = false;
-      this.attackButton.setScale(1.0).setFillStyle(0x6b2fa0, 0.7);
+      this.activateParry();
     });
 
     this.syncUi();
@@ -1146,8 +1144,8 @@ class DungeonScene extends Phaser.Scene {
     this.joystickVector.set(0, 0);
     this.joystickBase?.setVisible(false);
     this.joystickThumb?.setVisible(false);
-    this.attackPressed = false;
-    this.attackButton?.setScale(1.0).setFillStyle(0x6b2fa0, 0.7);
+    this.parryActive = false;
+    this.attackButton?.setScale(1.0).setFillStyle(0x2060a0, 0.7);
   }
 
   private pauseWithJoystickReset(): void {
@@ -1217,6 +1215,7 @@ class DungeonScene extends Phaser.Scene {
       enemy.chargeTimer = (bossProfile?.kind ?? spawn.kind) === "lancer" ? 2000 : -1;
       enemy.wobblePhase = Math.random() * Math.PI * 2;
       enemy.chargeDirection = new Phaser.Math.Vector2(0, 0);
+      enemy.rangedCooldown = 0;
       enemy.bossTag = bossProfile ? `boss-${this.run.floor}` : undefined;
       enemy.isDecoy = false;
       enemy.setDepth(3);
@@ -1289,6 +1288,7 @@ class DungeonScene extends Phaser.Scene {
       twin.chargeTimer = -1;
       twin.wobblePhase = Math.random() * Math.PI * 2;
       twin.chargeDirection = new Phaser.Math.Vector2(0, 0);
+      twin.rangedCooldown = 0;
       twin.bossTag = "twin-ice";
       twin.isDecoy = false;
       twin.setDepth(3);
@@ -1333,6 +1333,7 @@ class DungeonScene extends Phaser.Scene {
         decoy.chargeTimer = -1;
         decoy.wobblePhase = Math.random() * Math.PI * 2;
         decoy.chargeDirection = new Phaser.Math.Vector2(0, 0);
+        decoy.rangedCooldown = 0;
         decoy.bossTag = "shadow-decoy";
         decoy.isDecoy = true;
         decoy.setDepth(3);
@@ -1380,7 +1381,7 @@ class DungeonScene extends Phaser.Scene {
 
     this.updatePlayerStatus(delta);
     this.handlePlayerMovement(delta);
-    this.handleAttack(delta);
+    this.handleAutoFire(delta);
     this.updateEnemies(delta);
     this.updateFog();
     this.updatePlayerVisuals();
@@ -1574,15 +1575,58 @@ class DungeonScene extends Phaser.Scene {
     return false;
   }
 
-  private handleAttack(delta: number): void {
+  private activateParry(): void {
+    if (this.parryCooldown > 0 || this.parryActive) return;
+    this.parryActive = true;
+    this.parryTimer = 200;
+    this.parryCooldown = 800;
+    // Visual: bright flash on button
+    this.attackButton?.setScale(1.15).setFillStyle(0x40a0ff, 0.9);
+    // Visual: blue ring around player
+    this.parryGraphics?.destroy();
+    this.parryGraphics = this.add.graphics();
+    this.parryGraphics.lineStyle(3, 0x40a0ff, 0.8);
+    this.parryGraphics.strokeCircle(0, 0, 22);
+    this.parryGraphics.setDepth(5);
+    sfx.play("pickup");
+  }
+
+  private handleAutoFire(delta: number): void {
     this.fireTimer -= delta;
-    // Visual cooldown feedback on attack button
-    if (this.fireTimer > 0) {
-      this.attackButton?.setAlpha(0.4);
+
+    // Parry timer management
+    if (this.parryTimer > 0) {
+      this.parryTimer -= delta;
+      if (this.parryTimer <= 0) {
+        this.parryActive = false;
+        this.parryTimer = 0;
+        this.parryGraphics?.destroy();
+        this.parryGraphics = undefined;
+      }
+    }
+    if (this.parryCooldown > 0) {
+      this.parryCooldown -= delta;
+    }
+
+    // Update parry button visuals
+    if (this.parryActive) {
+      this.attackButton?.setFillStyle(0x40a0ff, 0.9);
+      this.attackButton?.setAlpha(1.0);
+    } else if (this.parryCooldown > 0) {
+      this.attackButton?.setScale(1.0).setFillStyle(0x2060a0, 0.7);
+      this.attackButton?.setAlpha(0.3);
     } else {
+      this.attackButton?.setScale(1.0).setFillStyle(0x2060a0, 0.7);
       this.attackButton?.setAlpha(1.0);
     }
-    if (!this.attackPressed || this.fireTimer > 0) {
+
+    // Update parry ring position
+    if (this.parryGraphics && this.parryActive) {
+      this.parryGraphics.setPosition(this.player.x, this.player.y);
+    }
+
+    // Auto-fire: no button press needed
+    if (this.fireTimer > 0) {
       return;
     }
 
@@ -1594,28 +1638,16 @@ class DungeonScene extends Phaser.Scene {
         Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
       );
     const nearest = activeEnemies[0] ?? null;
+    if (!nearest) return;
 
     if (isWand(weapon)) {
-      // Wands: shoot at nearest enemy, or in last aim direction if none
-      if (nearest) {
-        this.spawnPlayerProjectile(nearest.x, nearest.y, weapon.specialEffects);
-      } else {
-        this.spawnPlayerProjectile(
-          this.player.x + this.lastAimDirection.x * 200,
-          this.player.y + this.lastAimDirection.y * 200,
-          weapon.specialEffects
-        );
-      }
+      // Wands: auto-target nearest visible enemy
+      this.spawnPlayerProjectile(nearest.x, nearest.y, weapon.specialEffects);
       this.fireTimer = Math.max(120, weapon.stats.fireRate - this.run.player.stats.S * 12);
     } else {
-      // Melee: swing at nearest enemy, or swing forward if none in range
-      const dist = nearest ? Phaser.Math.Distance.Between(this.player.x, this.player.y, nearest.x, nearest.y) : Infinity;
+      // Melee: auto-swing at nearest enemy in range
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, nearest.x, nearest.y);
       if (dist > weapon.range * 1.3) {
-        // No enemy in range: swing in movement direction (whiff)
-        const aimAngle = Math.atan2(this.lastAimDirection.y, this.lastAimDirection.x);
-        this.showMeleeArc(aimAngle, weapon.range, weapon.arc, weapon.attribute);
-        sfx.play("shoot");
-        this.fireTimer = Math.max(150, weapon.swingRate - this.run.player.stats.S * 12);
         return;
       }
       this.performMeleeSwing(weapon);
@@ -1776,6 +1808,7 @@ class DungeonScene extends Phaser.Scene {
       }
 
       enemy.fireCooldown -= delta;
+      enemy.rangedCooldown -= delta;
       enemy.summonCooldown -= delta;
       enemy.bossAbilityCd -= delta;
       const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
@@ -1981,6 +2014,28 @@ class DungeonScene extends Phaser.Scene {
         }
       }
 
+      // All enemy types fire projectiles (creates bullets to parry)
+      if (enemy.kind !== "shooter" && enemy.kind !== "summoner" && enemy.kind !== "rusher") {
+        const projRangeMap: Record<string, number> = {
+          chaser: 200, guardian: 180, berserker: 200,
+          splitter: 180, bomber: 160, shielder: 150, lancer: 250
+        };
+        const projCdMap: Record<string, number> = {
+          chaser: 1200, guardian: 1000, berserker: 1000,
+          splitter: 1400, bomber: 1200, shielder: 1300, lancer: 1500
+        };
+        const projRange = projRangeMap[enemy.kind] ?? 200;
+        let projCd = projCdMap[enemy.kind] ?? 1200;
+        // Berserker fires faster when enraged
+        if (enemy.kind === "berserker" && enemy.enraged) {
+          projCd = Math.max(400, projCd * 0.6);
+        }
+        if (distance <= projRange && enemy.rangedCooldown <= 0) {
+          this.spawnEnemyProjectile(enemy, 0);
+          enemy.rangedCooldown = projCd;
+        }
+      }
+
       if (enemy.kind === "summoner" && enemy.summonCooldown <= 0) {
         const summonCount = enemy.bossTier >= 4 ? 2 : 1;
         for (let i = 0; i < summonCount; i += 1) {
@@ -2073,6 +2128,7 @@ class DungeonScene extends Phaser.Scene {
     minion.chargeTimer = -1;
     minion.wobblePhase = Math.random() * Math.PI * 2;
     minion.chargeDirection = new Phaser.Math.Vector2(0, 0);
+    minion.rangedCooldown = 0;
     minion.setCircle(8);
   }
 
@@ -2454,6 +2510,66 @@ class DungeonScene extends Phaser.Scene {
     if (!projectile.active || (projectile as unknown) === this.player) {
       return;
     }
+
+    // Parry check: reflect the projectile
+    if (this.parryActive) {
+      // Find nearest enemy to aim reflected projectile
+      const activeEnemies = (this.enemies.getChildren() as EnemySprite[])
+        .filter((e) => e.active && e.visible && e.activeRoom)
+        .sort((a, b) =>
+          Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
+          Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
+        );
+      const target = activeEnemies[0];
+
+      // Destroy enemy projectile and spawn player projectile
+      const reflectedDamage = projectile.damage * 2;
+      const px = projectile.x;
+      const py = projectile.y;
+      projectile.destroy();
+
+      const reflected = this.projectiles.create(px, py, "projectile") as ProjectileSprite;
+      reflected.owner = "player";
+      reflected.damage = reflectedDamage;
+      reflected.piercing = 1;
+      reflected.attribute = this.run.player.weapon.attribute;
+      reflected.specialEffects = [];
+      reflected.lifetimeMs = 1200;
+      reflected.chainHits = 0;
+      reflected.setScale(1.2);
+      reflected.setTint(0x40a0ff);
+      if (reflected.body) {
+        if (target) {
+          this.physics.moveToObject(reflected, target, 380);
+        } else {
+          // No target: reverse direction
+          const body = reflected.body as Phaser.Physics.Arcade.Body;
+          body.setVelocity(-body.velocity.x * 380 / 260, -body.velocity.y * 380 / 260);
+        }
+      }
+
+      // PARRY! text popup
+      const parryText = this.add.text(this.player.x, this.player.y - 30, "PARRY!", {
+        fontFamily: "Trebuchet MS, sans-serif",
+        fontSize: "24px",
+        color: "#ffff00",
+        stroke: "#000000",
+        strokeThickness: 4
+      }).setOrigin(0.5).setDepth(10);
+      this.tweens.add({
+        targets: parryText,
+        y: this.player.y - 70,
+        alpha: 0,
+        scale: 1.5,
+        duration: 800,
+        onComplete: () => parryText.destroy()
+      });
+
+      sfx.play("pickup");
+      this.run.player.hitInvulnMs = Math.max(this.run.player.hitInvulnMs, 300);
+      return;
+    }
+
     if (this.run.player.armor.specialEffect === "Reflect" && Math.random() < 0.08 && projectile.body) {
       const body = projectile.body as Phaser.Physics.Arcade.Body;
       body.setVelocity(-body.velocity.x, -body.velocity.y);
