@@ -899,6 +899,9 @@ class DungeonScene extends Phaser.Scene {
   private joystickThumb?: Phaser.GameObjects.Arc;
   private joystickVector = new Phaser.Math.Vector2();
   private joystickPointer?: Phaser.Input.Pointer;
+  private attackButton!: Phaser.GameObjects.Arc;
+  private attackLabel!: Phaser.GameObjects.Text;
+  private attackPressed = false;
   private knockbackVelocity = new Phaser.Math.Vector2();
   private lastAimDirection = new Phaser.Math.Vector2(1, 0);
   private isDying = false;
@@ -929,6 +932,7 @@ class DungeonScene extends Phaser.Scene {
     this.enemyUpdateFrame = 0;
     this.bossDoorLocked = false;
     this.fireTimer = 0;
+    this.attackPressed = false;
     this.knockbackVelocity.set(0, 0);
     this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys);
     this.wasd = this.input.keyboard?.addKeys("W,A,S,D") as Record<string, Phaser.Input.Keyboard.Key>;
@@ -1041,6 +1045,40 @@ class DungeonScene extends Phaser.Scene {
       this.pauseWithJoystickReset();
       this.scene.launch("PauseScene");
     });
+
+    // Attack button (left side)
+    this.attackButton = this.add.circle(92, GAME_HEIGHT - 120, 36, 0x6b2fa0, 0.7)
+      .setScrollFactor(0)
+      .setDepth(20)
+      .setInteractive({ useHandCursor: true });
+    this.attackLabel = makeText(this, 72, GAME_HEIGHT - 134, "ATK", 22, "#f8f1ff")
+      .setScrollFactor(0)
+      .setDepth(21);
+    this.attackButton.on("pointerdown", () => {
+      if (this.isDialogOpen || this.scene.isPaused()) return;
+      this.attackPressed = true;
+      this.attackButton.setScale(1.15).setFillStyle(0x9b4fd0, 0.9);
+    });
+    this.attackButton.on("pointerup", () => {
+      this.attackPressed = false;
+      this.attackButton.setScale(1.0).setFillStyle(0x6b2fa0, 0.7);
+    });
+    this.attackButton.on("pointerout", () => {
+      this.attackPressed = false;
+      this.attackButton.setScale(1.0).setFillStyle(0x6b2fa0, 0.7);
+    });
+
+    // PC: SPACE key for attack
+    this.input.keyboard?.on("keydown-SPACE", () => {
+      if (this.isDialogOpen || this.scene.isPaused()) return;
+      this.attackPressed = true;
+      this.attackButton.setScale(1.15).setFillStyle(0x9b4fd0, 0.9);
+    });
+    this.input.keyboard?.on("keyup-SPACE", () => {
+      this.attackPressed = false;
+      this.attackButton.setScale(1.0).setFillStyle(0x6b2fa0, 0.7);
+    });
+
     this.syncUi();
   }
 
@@ -1061,6 +1099,11 @@ class DungeonScene extends Phaser.Scene {
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.isDialogOpen || this.scene.isPaused() || this.joystickPointer) {
+        return;
+      }
+      // Don't capture touches on the attack button area
+      const atkDist = Phaser.Math.Distance.Between(pointer.x, pointer.y, 92, GAME_HEIGHT - 120);
+      if (atkDist < 50) {
         return;
       }
       this.joystickPointer = pointer;
@@ -1090,6 +1133,8 @@ class DungeonScene extends Phaser.Scene {
     this.joystickVector.set(0, 0);
     this.joystickBase?.setVisible(false);
     this.joystickThumb?.setVisible(false);
+    this.attackPressed = false;
+    this.attackButton?.setScale(1.0).setFillStyle(0x6b2fa0, 0.7);
   }
 
   private pauseWithJoystickReset(): void {
@@ -1322,7 +1367,7 @@ class DungeonScene extends Phaser.Scene {
 
     this.updatePlayerStatus(delta);
     this.handlePlayerMovement(delta);
-    this.handleAutoFire(delta);
+    this.handleAttack(delta);
     this.updateEnemies(delta);
     this.updateFog();
     this.updatePlayerVisuals();
@@ -1516,9 +1561,15 @@ class DungeonScene extends Phaser.Scene {
     return false;
   }
 
-  private handleAutoFire(delta: number): void {
+  private handleAttack(delta: number): void {
     this.fireTimer -= delta;
+    // Visual cooldown feedback on attack button
     if (this.fireTimer > 0) {
+      this.attackButton?.setAlpha(0.4);
+    } else {
+      this.attackButton?.setAlpha(1.0);
+    }
+    if (!this.attackPressed || this.fireTimer > 0) {
       return;
     }
 
