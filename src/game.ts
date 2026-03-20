@@ -547,8 +547,19 @@ class TitleScene extends Phaser.Scene {
 
     makeText(this, 56, 680, `Build: ${__BUILD_TIME_JST__}`, 16, "#9ad1ff");
     makeText(this, 56, 706, `Commit: ${__COMMIT_HASH__}`, 16, "#9ad1ff");
-    makeText(this, 56, 780, "PC: WASD / Arrow Keys", 18, "#f8f1ff");
-    makeText(this, 56, 808, "Mobile: Virtual Joystick", 18, "#f8f1ff");
+    makeText(this, 56, 760, "PC: WASD移動 / SPACE攻撃", 18, "#f8f1ff");
+    makeText(this, 56, 788, "Mobile: 左手移動 / 右手ATK", 18, "#f8f1ff");
+
+    const isLefty = localStorage.getItem("arcane-lefty") === "true";
+    const handBtn = this.add.rectangle(GAME_WIDTH / 2, 840, 260, 40, 0x241734, 1)
+      .setStrokeStyle(1, 0x9d4edd)
+      .setInteractive({ useHandCursor: true });
+    const handLabel = makeText(this, GAME_WIDTH / 2 - 100, 828, isLefty ? "操作: 右手移動 / 左手ATK" : "操作: 左手移動 / 右手ATK", 16, "#cdb4db");
+    handBtn.on("pointerdown", () => {
+      const newLefty = localStorage.getItem("arcane-lefty") !== "true";
+      localStorage.setItem("arcane-lefty", String(newLefty));
+      handLabel.setText(newLefty ? "操作: 右手移動 / 左手ATK" : "操作: 左手移動 / 右手ATK");
+    });
 
     this.input.keyboard?.once("keydown-SPACE", () => saved ? this.continueRun(saved) : this.startRun());
     this.input.keyboard?.once("keydown-ENTER", () => saved ? this.continueRun(saved) : this.startRun());
@@ -1046,12 +1057,14 @@ class DungeonScene extends Phaser.Scene {
       this.scene.launch("PauseScene");
     });
 
-    // Attack button (left side)
-    this.attackButton = this.add.circle(92, GAME_HEIGHT - 120, 36, 0x6b2fa0, 0.7)
+    // Attack button (right side by default, configurable)
+    const leftHanded = localStorage.getItem("arcane-lefty") === "true";
+    const atkX = leftHanded ? 92 : GAME_WIDTH - 92;
+    this.attackButton = this.add.circle(atkX, GAME_HEIGHT - 120, 36, 0x6b2fa0, 0.7)
       .setScrollFactor(0)
       .setDepth(20)
       .setInteractive({ useHandCursor: true });
-    this.attackLabel = makeText(this, 72, GAME_HEIGHT - 134, "ATK", 22, "#f8f1ff")
+    this.attackLabel = makeText(this, atkX - 20, GAME_HEIGHT - 134, "ATK", 22, "#f8f1ff")
       .setScrollFactor(0)
       .setDepth(21);
     this.attackButton.on("pointerdown", () => {
@@ -1102,7 +1115,7 @@ class DungeonScene extends Phaser.Scene {
         return;
       }
       // Don't capture touches on the attack button area
-      const atkDist = Phaser.Math.Distance.Between(pointer.x, pointer.y, 92, GAME_HEIGHT - 120);
+      const atkDist = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.attackButton.x, this.attackButton.y);
       if (atkDist < 50) {
         return;
       }
@@ -1574,39 +1587,35 @@ class DungeonScene extends Phaser.Scene {
     }
 
     const weapon = this.run.player.weapon;
-    if (isWand(weapon)) {
-      // Wands auto-target nearest enemy
-      const activeEnemies = this.enemies.getChildren().filter((child) => {
-        const enemy = child as EnemySprite;
-        return enemy.active && enemy.visible && enemy.activeRoom;
-      }) as EnemySprite[];
-      if (activeEnemies.length === 0) return;
-      activeEnemies.sort((a, b) =>
+    const activeEnemies = (this.enemies.getChildren() as EnemySprite[])
+      .filter((e) => e.active && e.visible && e.activeRoom)
+      .sort((a, b) =>
         Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
         Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
       );
-      const target = activeEnemies[0];
-      this.spawnPlayerProjectile(target.x, target.y, weapon.specialEffects);
+    const nearest = activeEnemies[0] ?? null;
+
+    if (isWand(weapon)) {
+      // Wands: shoot at nearest enemy, or in last aim direction if none
+      if (nearest) {
+        this.spawnPlayerProjectile(nearest.x, nearest.y, weapon.specialEffects);
+      } else {
+        this.spawnPlayerProjectile(
+          this.player.x + this.lastAimDirection.x * 200,
+          this.player.y + this.lastAimDirection.y * 200,
+          weapon.specialEffects
+        );
+      }
       this.fireTimer = Math.max(120, weapon.stats.fireRate - this.run.player.stats.S * 12);
     } else {
-      // Melee attack - target nearest enemy
-      const activeEnemies = this.enemies.getChildren().filter((child) => {
-        const enemy = child as EnemySprite;
-        return enemy.active && enemy.visible && enemy.activeRoom;
-      }) as EnemySprite[];
-
-      if (activeEnemies.length === 0) {
-        return;
-      }
-
-      activeEnemies.sort((a, b) =>
-        Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
-        Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
-      );
-
-      const target = activeEnemies[0];
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
+      // Melee: swing at nearest enemy, or swing forward if none in range
+      const dist = nearest ? Phaser.Math.Distance.Between(this.player.x, this.player.y, nearest.x, nearest.y) : Infinity;
       if (dist > weapon.range * 1.3) {
+        // No enemy in range: swing in movement direction (whiff)
+        const aimAngle = Math.atan2(this.lastAimDirection.y, this.lastAimDirection.x);
+        this.showMeleeArc(aimAngle, weapon.range, weapon.arc, weapon.attribute);
+        sfx.play("shoot");
+        this.fireTimer = Math.max(150, weapon.swingRate - this.run.player.stats.S * 12);
         return;
       }
       this.performMeleeSwing(weapon);

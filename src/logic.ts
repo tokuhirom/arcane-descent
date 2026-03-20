@@ -89,13 +89,15 @@ export function applyPassiveTick(player: PlayerState): TickResult {
   if (player.burnMs > 0) {
     const result = applyDamage(player, 2.5, "None", true);
     burnDamage = result.damageDealt;
+    if (player.hp < 1) player.hp = 1; // DoT won't kill, leaves 1 HP
   }
   if (player.poisonMs > 0) {
     const result = applyDamage(player, 1.2, "None", true);
     poisonDamage = result.damageDealt;
+    if (player.hp < 1) player.hp = 1; // DoT won't kill, leaves 1 HP
   }
 
-  return { died: player.hp <= 0, burnDamage, poisonDamage, regen: 0 };
+  return { died: false, burnDamage, poisonDamage, regen: 0 };
 }
 
 export function healOnKill(player: PlayerState): number {

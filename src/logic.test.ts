@@ -30,7 +30,7 @@ describe("applyDamage", () => {
     const player = freshPlayer();
     const { damageDealt } = applyDamage(player, 10, "None", false);
     expect(damageDealt).toBeCloseTo(10 * 0.96);
-    expect(player.hp).toBeCloseTo(36 - 9.6);
+    expect(player.hp).toBeCloseTo(60 - 9.6);
     expect(player.hitInvulnMs).toBe(450);
   });
 
@@ -39,7 +39,7 @@ describe("applyDamage", () => {
     player.hitInvulnMs = 100;
     const { damageDealt } = applyDamage(player, 10, "None", false);
     expect(damageDealt).toBe(0);
-    expect(player.hp).toBe(36);
+    expect(player.hp).toBe(60);
   });
 
   it("bypassInvuln で無敵を貫通", () => {
@@ -47,7 +47,7 @@ describe("applyDamage", () => {
     player.hitInvulnMs = 100;
     const { damageDealt } = applyDamage(player, 10, "None", true);
     expect(damageDealt).toBeGreaterThan(0);
-    expect(player.hp).toBeLessThan(36);
+    expect(player.hp).toBeLessThan(60);
   });
 
   it("Fire 属性で burnMs が設定される", () => {
@@ -99,7 +99,7 @@ describe("applyPassiveTick (DoT)", () => {
     applyPassiveTick(player);
     // burnMs は tick 前の値のまま（再適用されていない）
     expect(player.burnMs).toBe(800);
-    expect(player.hp).toBeLessThan(36);
+    expect(player.hp).toBeLessThan(60);
   });
 
   it("poison の tick ダメージで poisonMs が再適用されない", () => {
@@ -107,7 +107,7 @@ describe("applyPassiveTick (DoT)", () => {
     player.poisonMs = 1000;
     applyPassiveTick(player);
     expect(player.poisonMs).toBe(1000);
-    expect(player.hp).toBeLessThan(36);
+    expect(player.hp).toBeLessThan(60);
   });
 
   it("時間経過では自然回復しない", () => {
