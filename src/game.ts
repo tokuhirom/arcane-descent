@@ -1411,10 +1411,13 @@ class DungeonScene extends Phaser.Scene {
   private shouldEnemyEngage(enemy: EnemySprite): boolean {
     const sameRoom = this.currentRoomId !== undefined && enemy.roomId === this.currentRoomId;
     const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
-    const near = distance <= TILE_SIZE * 8;
-    const visible = distance <= TILE_SIZE * 14 && this.hasLineOfSight(enemy.x, enemy.y, this.player.x, this.player.y);
+    // Enemy detection range scales with player's view range but slightly shorter
+    const playerViewRange = (4 + Math.floor(this.run.player.stats.I / 2)) * TILE_SIZE;
+    const enemyDetectRange = playerViewRange * 0.9;
+    const near = distance <= enemyDetectRange;
+    const visible = distance <= playerViewRange * 1.2 && this.hasLineOfSight(enemy.x, enemy.y, this.player.x, this.player.y);
     // Once engaged, keep chasing until far away
-    if (enemy.activeRoom && distance <= TILE_SIZE * 20) {
+    if (enemy.activeRoom && distance <= playerViewRange * 1.5) {
       return true;
     }
     return sameRoom || near || visible;
@@ -2031,8 +2034,8 @@ class DungeonScene extends Phaser.Scene {
       // All enemy types fire projectiles (creates bullets to parry)
       if (enemy.kind !== "shooter" && enemy.kind !== "summoner" && enemy.kind !== "rusher") {
         const projRangeMap: Record<string, number> = {
-          chaser: 200, guardian: 180, berserker: 200,
-          splitter: 180, bomber: 160, shielder: 150, lancer: 250
+          chaser: 100, guardian: 90, berserker: 110,
+          splitter: 90, bomber: 80, shielder: 80, lancer: 130
         };
         const projCdMap: Record<string, number> = {
           chaser: 1200, guardian: 1000, berserker: 1000,
