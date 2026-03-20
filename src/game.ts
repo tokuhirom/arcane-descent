@@ -2581,6 +2581,10 @@ class DungeonScene extends Phaser.Scene {
 
       sfx.play("pickup");
       this.run.player.hitInvulnMs = Math.max(this.run.player.hitInvulnMs, 300);
+      // Successful parry resets cooldown — chain parries!
+      this.parryCooldown = 0;
+      this.parryTimer = 200;
+      this.parryActive = true;
       return;
     }
 
