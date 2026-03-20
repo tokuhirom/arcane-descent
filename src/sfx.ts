@@ -8,7 +8,8 @@ type SfxName =
   | "stairs"
   | "gameOver"
   | "bossAlert"
-  | "parry";
+  | "parry"
+  | "guard";
 
 export class SfxManager {
   private ctx: AudioContext | null = null;
@@ -81,6 +82,9 @@ export class SfxManager {
         break;
       case "parry":
         this.playParry(ctx);
+        break;
+      case "guard":
+        this.playGuard(ctx);
         break;
     }
   }
@@ -193,6 +197,11 @@ export class SfxManager {
     this.osc(ctx, "sawtooth", 55, 0.15, t, 0.5, 40);
     this.osc(ctx, "sine", 80, 0.2, t, 0.4, 50);
     this.noise(ctx, 0.08, t, 0.3);
+  }
+
+  private playGuard(ctx: AudioContext): void {
+    const t = ctx.currentTime;
+    this.noise(ctx, 0.04, t, 0.05);
   }
 
   private playParry(ctx: AudioContext): void {

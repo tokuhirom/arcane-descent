@@ -1602,7 +1602,7 @@ class DungeonScene extends Phaser.Scene {
     this.parryGraphics.lineStyle(3, 0x40a0ff, 0.8);
     this.parryGraphics.strokeCircle(0, 0, 22);
     this.parryGraphics.setDepth(5);
-    sfx.play("pickup");
+    sfx.play("guard");
   }
 
   private handleAutoFire(delta: number): void {
@@ -2528,9 +2528,13 @@ class DungeonScene extends Phaser.Scene {
 
     // Parry check: reflect the projectile
     if (this.parryActive) {
-      // Find nearest enemy to aim reflected projectile
+      // Record incoming velocity before destroying
+      const inVx = projectile.body ? (projectile.body as Phaser.Physics.Arcade.Body).velocity.x : 0;
+      const inVy = projectile.body ? (projectile.body as Phaser.Physics.Arcade.Body).velocity.y : 0;
+
+      // Find nearest enemy (visible or not) to aim reflected projectile
       const activeEnemies = (this.enemies.getChildren() as EnemySprite[])
-        .filter((e) => e.active && e.visible && e.activeRoom)
+        .filter((e) => e.active && e.activeRoom)
         .sort((a, b) =>
           Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
           Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
@@ -2557,9 +2561,10 @@ class DungeonScene extends Phaser.Scene {
         if (target) {
           this.physics.moveToObject(reflected, target, 380);
         } else {
-          // No target: reverse direction
+          // No visible target: reverse the incoming direction
+          const speed = Math.max(380, Math.hypot(inVx, inVy));
           const body = reflected.body as Phaser.Physics.Arcade.Body;
-          body.setVelocity(-body.velocity.x * 380 / 260, -body.velocity.y * 380 / 260);
+          body.setVelocity(-inVx / Math.hypot(inVx, inVy || 1) * speed, -inVy / Math.hypot(inVx, inVy || 1) * speed);
         }
       }
 
